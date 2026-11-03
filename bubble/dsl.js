@@ -83,6 +83,7 @@
     if (o.p) Object.assign(p, o.p);
     const e = { type, id, name, default_name: type + ' ' + id, properties: p };
     if (o.style) e.style = o.style;
+    if (o.style === null) delete e.style;
     if (o.when) {
       e.states = Object.fromEntries(o.when.map((s, i) => { const sp = props({ ...s[1] }); if (!('fh' in s[1])) delete sp.fit_height; if (s[1].show) { sp.is_visible = true; } if (s[1].p) Object.assign(sp, s[1].p); if (s[1].text !== undefined) sp.text = typeof s[1].text === 'string' ? TX(s[1].text) : s[1].text; return [i, { type: 'State', condition: s[0], properties: sp }]; }));
     }
@@ -113,7 +114,7 @@
     Html: (name, html, o = {}) => el('HTML', name, { fh: true, p: { html: typeof html === 'string' ? TX(html) : html, ...(o.p || {}) }, ...o }),
     Img: (name, src, o = {}) => el('Image', name, { p: { image: src, ...(o.p || {}) }, ...o }),
     RG: (name, type, ds, o, cell) => el('RepeatingGroup', name, { style: 'RepeatingGroup_transparent_', type, ds, fh: true, col: 1, p: { columns: o.cols || 1, fixed_columns: true, fixed_rows: false, show_all_items: true, separator_style: 'solid', separator_width: o.sep ?? 12, separator_color: 'rgba(0,0,0,0)', cell_min_height_css: '0px', ...(o.p || {}) }, ...o }, [cell]),
-    Popup: (name, o, kids) => el('Popup', name, { style: o.style || 'Popup_standard_popup_', col: 1, gap: 14, pad: 24, ...o }, kids),
+    Popup: (name, o, kids) => el('Popup', name, { col: 1, gap: 14, pad: 24, ...o }, kids),
   };
 
   // ---------- workflows ----------

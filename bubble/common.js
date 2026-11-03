@@ -4,13 +4,14 @@
   const { P, CU, PI, V, EL, S, OV, M, chain } = X;
 
   // Donor page shell: Header + main column + filler + footer + tab bar (copied from the agent-built index page)
-  function shell(mainKids, mainOpts = {}) {
+  function shell(mainKids, mainOpts = {}, before = []) {
     const sh = JSON.parse(localStorage.getItem('cb_shell'));
     const get = (id) => JSON.parse(JSON.stringify(sh.find((e) => e.id === id)));
     const hdr = get('ix_hdr'), fill = get('ix_fill'), foot = get('ix_foot'), pad = get('ix_tabpad'), tabs = get('ix_tabs');
     const main = B.G('Main Group', { col: 1, maxw: 1120, ha: 'center', pad: [32, 24, 32, 24], gap: 24, when: [mob({ pad: [16, 16, 24, 16], gap: 16 })], ...mainOpts }, mainKids);
-    [hdr, main, fill, foot, pad, tabs].forEach((e, i) => { e.properties.order = i + 1; delete e.current_parent; });
-    return [hdr, main, fill, foot, pad, tabs];
+    const all = [hdr, ...before, main, fill, foot, pad, tabs];
+    all.forEach((e, i) => { e.properties.order = i + 1; delete e.current_parent; });
+    return all;
   }
 
   // Progress bar as HTML: pct expression (number 0..100)
@@ -55,8 +56,9 @@
   });
 
   // Category code chip (44px teal-light square)
-  const chip = (name, base) => B.G(name, { w: 44, h: 44, r: 12, bg: 'teallight', col: 1, cva: 'center' }, [
-    B.T(name + ' Code', TX(chain(base(), 'category_option_category', 'code')), { fs: 11, fwt: 800, fc: 'primaryteal', ta: 'center', fw: true, ha: 'center' }),
+  const CAT = { 'Packaged food': ['rgba(253,240,222,1)', 'rgba(184,104,26,1)'], Hygiene: ['rgba(227,238,251,1)', 'rgba(47,109,181,1)'], 'Medical supplies': ['rgba(251,228,228,1)', 'rgba(194,59,59,1)'], Clothing: ['rgba(226,244,232,1)', 'rgba(46,138,80,1)'], Education: ['rgba(237,230,250,1)', 'rgba(106,72,181,1)'] };
+  const chip = (name, base, size = 40) => B.G(name, { w: size, h: size, r: 12, bg: 'teallight', col: 1, cva: 'center', when: Object.entries(CAT).map(([c, v]) => [chain(base(), 'category_option_category', X.eq(OV('category', c))), { bg: v[0] }]) }, [
+    B.T(name + ' Code', TX(chain(base(), 'category_option_category', 'code')), { fs: 11, fwt: 800, fc: 'primaryteal', ta: 'center', fw: true, ha: 'center', when: Object.entries(CAT).map(([c, v]) => [chain(base(), 'category_option_category', X.eq(OV('category', c))), { fc: v[1] }]) }),
   ]);
 
   // Recalculate an item's status after its numbers change (spec section 4). thing = expression for the item.
