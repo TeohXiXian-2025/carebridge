@@ -6,8 +6,7 @@
 | 🎨 **Figma design** (mobile + desktop) | https://www.figma.com/design/jHmYLe3TR7fmlCwH4OWXkK |
 | 🧩 **Bubble.io version** | _coming soon_ |
 | 📘 **User manual** (PDF) | [docs/CareBridge-User-Manual.pdf](docs/CareBridge-User-Manual.pdf) |
-| 🛠️ **Developer manual** (PDF) | [docs/CareBridge-Developer-Manual.pdf](docs/CareBridge-Developer-Manual.pdf) |
-| ✅ **Test checklist** (PDF) | [docs/CareBridge-Test-Checklist.pdf](docs/CareBridge-Test-Checklist.pdf) |
+| 🛠️ **Developer manual & test checklist** (PDF) | [docs/CareBridge-Developer-Manual.pdf](docs/CareBridge-Developer-Manual.pdf) |
 
 **Give what is needed, not what is guessed.** A needs-based wishlist and direct pledging web app for welfare homes in the Klang Valley. WIX2002 Project Management, Universiti Malaya.
 

@@ -16,6 +16,7 @@ export function pushState(): PushState {
 async function activeRegistration() {
   const cfg = encodeURIComponent(JSON.stringify(firebaseConfig));
   const reg = await navigator.serviceWorker.register(`/firebase-messaging-sw.js?config=${cfg}`, { scope: '/firebase-cloud-messaging-push-scope' });
+  void reg.update().catch(() => undefined); // pick up a newer notification worker straight away
   // getToken needs an *active* worker; a fresh install is still "installing" for a moment.
   const sw = reg.installing || reg.waiting;
   if (!reg.active && sw)
