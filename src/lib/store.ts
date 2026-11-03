@@ -1,4 +1,4 @@
-import type { Home, NewHome, NewItem, NewPledge, Pledge, UserProfile, WishlistItem } from './types';
+import type { Home, Invite, NewHome, NewItem, NewPledge, Pledge, UserProfile, WishlistItem } from './types';
 import { calcStatus } from './logic';
 
 export interface Store {
@@ -33,6 +33,16 @@ export interface Store {
   createPledge(user: UserProfile, input: NewPledge): Promise<Pledge>;
   setPledgeStatus(id: string, status: 'Accepted' | 'Declined' | 'Cancelled'): Promise<Pledge>;
   markReceived(id: string, delivered: number): Promise<Pledge>;
+
+  /* Managers: platform admins and home managers (a home can have several). */
+  platformAdmins(): Promise<UserProfile[]>;
+  homeManagers(homeId: string): Promise<UserProfile[]>;
+  invites(filter: { role: Invite['role']; homeId?: string }): Promise<Invite[]>;
+  /** Invites an email. Platform admins upgrade an existing account straight away; returns 'added' or 'invited'. */
+  invite(by: UserProfile, email: string, role: Invite['role'], home?: Home): Promise<'added' | 'invited'>;
+  cancelInvite(email: string): Promise<void>;
+  /** Back to an ordinary donor account: remove a manager or admin, or leave a home yourself. */
+  demote(uid: string): Promise<void>;
 }
 
 /* ---------- change notifications: pages re-fetch after any write ---------- */

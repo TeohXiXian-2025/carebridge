@@ -1,16 +1,16 @@
 import {
   createUserWithEmailAndPassword, getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect,
-  signOut as fbSignOut, type User,
+  sendEmailVerification, signOut as fbSignOut, type User,
 } from 'firebase/auth';
 import {
-  arrayUnion, collection, doc, getCountFromServer, getDoc, getDocs, getFirestore, query, runTransaction, setDoc, updateDoc, where, writeBatch,
+  arrayUnion, collection, deleteDoc, doc, getCountFromServer, getDoc, getDocs, getFirestore, query, runTransaction, setDoc, updateDoc, where, writeBatch,
   type DocumentData, type QueryConstraint,
 } from 'firebase/firestore';
 import { firebaseApp } from './firebase';
 import { applyPledge, applyReceived, applyRelease, bump, UserError, type Store } from './store';
 import { calcStatus, canPledge, makePledgeNo, stillNeeded } from './logic';
 import { isPlatformAdminEmail } from './admins';
-import type { Home, Pledge, UserProfile, WishlistItem } from './types';
+import type { Home, Invite, Pledge, UserProfile, WishlistItem } from './types';
 
 const AUTH_ERRORS: Record<string, string> = {
   'auth/invalid-credential': 'Wrong email or password.',
@@ -49,20 +49,30 @@ export function createFirebaseStore(): Store {
   let pending: { fullName: string; phone: string } | null = null;
   /** Every signed-in account gets a users/{uid} profile (Google sign-ins on first visit, email sign-ups right away). */
   async function ensureProfile(fu: User): Promise<UserProfile> {
-    const existing = await one<UserProfile>('users', fu.uid);
-    if (existing) {
-      if (existing.role === 'donor' && fu.emailVerified && isPlatformAdminEmail(fu.email ?? '')) {
-        await updateDoc(doc(db, 'users', fu.uid), { role: 'platformAdmin' });
-        return { ...existing, role: 'platformAdmin' };
-      }
-      return existing;
-    }
     const email = (fu.email ?? '').toLowerCase();
-    const role = fu.emailVerified && isPlatformAdminEmail(email) ? 'platformAdmin' : 'donor';
-    const profile = { email, fullName: pending?.fullName || fu.displayName || email.split('@')[0], phone: pending?.phone ?? fu.phoneNumber ?? '', role, homeId: null };
-    pending = null;
-    await setDoc(doc(db, 'users', fu.uid), profile);
-    return { id: fu.uid, ...profile } as UserProfile;
+    let profile = await one<UserProfile>('users', fu.uid);
+    if (!profile) {
+      const role = fu.emailVerified && isPlatformAdminEmail(email) ? 'platformAdmin' : 'donor';
+      const data = { email, fullName: pending?.fullName || fu.displayName || email.split('@')[0], phone: pending?.phone ?? fu.phoneNumber ?? '', role, homeId: null };
+      pending = null;
+      await setDoc(doc(db, 'users', fu.uid), data);
+      profile = { id: fu.uid, ...data } as UserProfile;
+    }
+    if (profile.role !== 'donor' || !fu.emailVerified) return profile;
+    // Bootstrap admin email, or a pending invite for this (verified) email → upgrade now.
+    let grant: { role: UserProfile['role']; homeId: string | null } | null = isPlatformAdminEmail(email) ? { role: 'platformAdmin', homeId: null } : null;
+    const inv = grant ? null : await one<Invite>('invites', email);
+    if (inv) grant = { role: inv.role, homeId: inv.role === 'homeAdmin' ? inv.homeId ?? null : null };
+    if (!grant) return profile;
+    try {
+      const b = writeBatch(db);
+      b.update(doc(db, 'users', fu.uid), grant);
+      if (inv) b.delete(doc(db, 'invites', email));
+      await b.commit();
+      return { ...profile, ...grant };
+    } catch {
+      return profile;
+    }
   }
   const write = async <T,>(fn: () => Promise<T>) => {
     try {
@@ -88,7 +98,9 @@ export function createFirebaseStore(): Store {
     async signUp(email, password, fullName, phone) {
       try {
         pending = { fullName, phone };
-        await createUserWithEmailAndPassword(auth, email.trim(), password);
+        const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        // Lets invites to this email work later (invites need a confirmed email).
+        void sendEmailVerification(cred.user).catch(() => {});
       } catch (e) {
         pending = null;
         throw friendly(e);
@@ -131,12 +143,12 @@ export function createFirebaseStore(): Store {
     publicItems: () => list<WishlistItem>('items', where('homeApproved', '==', true)),
     homeItems: (homeId, asAdmin) =>
       asAdmin
-        ? list<WishlistItem>('items', where('homeAdminId', '==', auth.currentUser?.uid ?? '-'), where('homeId', '==', homeId))
+        ? list<WishlistItem>('items', where('homeId', '==', homeId))
         : list<WishlistItem>('items', where('homeId', '==', homeId), where('homeApproved', '==', true)),
     allItems: () => list<WishlistItem>('items'),
     getPledge: (id) => one<Pledge>('pledges', id),
     myPledges: (uid) => list<Pledge>('pledges', where('donorId', '==', uid)),
-    homePledges: (user) => list<Pledge>('pledges', where('homeAdminId', '==', user.id)),
+    homePledges: (user) => list<Pledge>('pledges', where('homeId', '==', user.homeId ?? '-')),
     allPledges: () => list<Pledge>('pledges'),
     async countDonors() {
       return (await getCountFromServer(query(col('users'), where('role', '==', 'donor')))).data().count;
@@ -158,7 +170,7 @@ export function createFirebaseStore(): Store {
       write(async () => {
         await updateDoc(doc(db, 'homes', id), data);
         if (data.name || data.area) {
-          const items = await list<WishlistItem>('items', where('homeAdminId', '==', auth.currentUser?.uid ?? '-'), where('homeId', '==', id));
+          const items = await list<WishlistItem>('items', where('homeId', '==', id));
           const b = writeBatch(db);
           const h = await one<Home>('homes', id);
           items.forEach((i) => b.update(doc(db, 'items', i.id), { homeName: h!.name, homeArea: h!.area }));
@@ -253,5 +265,32 @@ export function createFirebaseStore(): Store {
           return { ...p, ...patch };
         }),
       ),
+
+    platformAdmins: () => list<UserProfile>('users', where('role', '==', 'platformAdmin')),
+    homeManagers: (homeId) => list<UserProfile>('users', where('role', '==', 'homeAdmin'), where('homeId', '==', homeId)),
+    invites: ({ role, homeId }) =>
+      homeId ? list<Invite>('invites', where('role', '==', role), where('homeId', '==', homeId)) : list<Invite>('invites', where('role', '==', role)),
+    invite: (by, rawEmail, role, home) =>
+      write(async () => {
+        const email = rawEmail.trim().toLowerCase();
+        if (!/^\S+@\S+\.\S+$/.test(email)) throw new UserError('Enter a valid email address.');
+        if (by.role === 'platformAdmin') {
+          const found = await list<UserProfile>('users', where('email', '==', email));
+          const u = found[0];
+          if (u && u.role !== 'donor') {
+            const already = u.role === role && (role === 'platformAdmin' || u.homeId === home?.id);
+            throw new UserError(already ? 'This account already has that role.' : 'This account already manages a home or the platform. Remove it there first.');
+          }
+          if (u) {
+            await updateDoc(doc(db, 'users', u.id), { role, homeId: role === 'homeAdmin' ? home?.id ?? null : null });
+            return 'added' as const;
+          }
+        }
+        const inv: Invite = { email, role, homeId: home?.id ?? null, homeName: home?.name ?? null, invitedBy: by.id, invitedByName: by.fullName, createdAt: Date.now() };
+        await setDoc(doc(db, 'invites', email), inv);
+        return 'invited' as const;
+      }),
+    cancelInvite: (email) => write(() => deleteDoc(doc(db, 'invites', email))),
+    demote: (uid) => write(() => updateDoc(doc(db, 'users', uid), { role: 'donor', homeId: null })),
   };
 }

@@ -21,7 +21,7 @@ import nodemailer from 'nodemailer';
 
 type Req = { method?: string; headers: Record<string, string | string[] | undefined>; body?: unknown };
 type Res = { status(code: number): Res; json(body: unknown): void };
-type Note = { to: string[]; title: string; body: string; path: string; email?: { subject: string; lines: string[] } };
+type Note = { to: string[]; title: string; body: string; path: string; email?: { subject: string; lines: string[] }; toEmail?: string };
 
 function admin() {
   if (!getApps().length) {
@@ -68,25 +68,31 @@ export default async function handler(req: Req, res: Res) {
   }
   const host = String(req.headers['x-forwarded-host'] ?? req.headers.host ?? '');
   const appUrl = process.env.APP_URL || `https://${host}`;
-  const ev = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as { type: string; pledgeId?: string; homeId?: string };
+  const ev = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as { type: string; pledgeId?: string; homeId?: string; email?: string };
   const notes: Note[] = [];
+  const me = (await a.db.doc(`users/${caller}`).get()).data() ?? {};
+  /** A home can have several managers; all of them are notified. */
+  const managers = async (homeId: string) =>
+    (await a.db.collection('users').where('role', '==', 'homeAdmin').where('homeId', '==', homeId).get()).docs.map((d) => d.id);
 
   if (ev.pledgeId) {
     const snap = await a.db.doc(`pledges/${ev.pledgeId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'Pledge not found' });
     const p = snap.data()!;
-    if (caller !== p.donorId && caller !== p.homeAdminId) return res.status(403).json({ error: 'Not your pledge' });
+    const isManager = me.role === 'homeAdmin' && me.homeId === p.homeId;
+    if (caller !== p.donorId && !isManager) return res.status(403).json({ error: 'Not your pledge' });
+    const homeTeam = await managers(p.homeId);
     const home = (await a.db.doc(`homes/${p.homeId}`).get()).data() ?? {};
     const what = `${p.itemName} × ${p.quantity}`;
     const where = `${home.address ?? ''} (${home.dropoffHours ?? ''})`;
     if (ev.type === 'pledge.created' && p.status === 'Pending') {
-      notes.push({ to: [p.homeAdminId], title: 'New pledge', body: `${p.contactName} pledged ${what}`, path: '/admin/pledges',
+      notes.push({ to: homeTeam, title: 'New pledge', body: `${p.contactName} pledged ${what}`, path: '/admin/pledges',
         email: { subject: `New pledge: ${what}`, lines: [`${p.contactName} (${p.contactPhone}) pledged ${what} to ${p.homeName}.`, `Planned drop-off: ${fmtDate(p.dropoffDate)}. Pledge no. ${p.pledgeNo}.`, 'Open CareBridge to accept or decline it.'] } });
       notes.push({ to: [p.donorId], title: 'Pledge sent', body: `${p.homeName} will review your pledge of ${what}.`, path: '/my-pledges',
         email: { subject: `Your CareBridge pledge ${p.pledgeNo}`, lines: [`Thank you! You pledged ${what} to ${p.homeName}.`, `Planned drop-off: ${fmtDate(p.dropoffDate)} at ${where}.`, 'Status: Pending. We will let you know when the home accepts it.'] } });
     }
     if (ev.type === 'pledge.cancelled' && p.status === 'Cancelled')
-      notes.push({ to: [p.homeAdminId], title: 'Pledge cancelled', body: `${p.contactName} cancelled ${what}`, path: '/admin/pledges',
+      notes.push({ to: homeTeam, title: 'Pledge cancelled', body: `${p.contactName} cancelled ${what}`, path: '/admin/pledges',
         email: { subject: `Pledge cancelled: ${what}`, lines: [`${p.contactName} cancelled pledge ${p.pledgeNo} (${what}). The quantity is open for other donors again.`] } });
     if (ev.type === 'pledge.accepted' && p.status === 'Accepted')
       notes.push({ to: [p.donorId], title: 'Pledge accepted', body: `${p.homeName} accepted ${what}. See you at drop-off!`, path: '/my-pledges',
@@ -107,18 +113,35 @@ export default async function handler(req: Req, res: Res) {
         email: { subject: `New home to review: ${h.name}`, lines: [`${h.name} (${h.type}, ${h.area}) registered on CareBridge and is waiting for approval.`] } });
     }
     if (ev.type === 'home.reviewed' && h.status !== 'Pending') {
-      const me = await a.db.doc(`users/${caller}`).get();
-      if (me.data()?.role === 'platformAdmin') {
+      if (me.role === 'platformAdmin') {
         const ok = h.status === 'Approved';
-        notes.push({ to: [h.adminId], title: ok ? 'Your home is approved 🎉' : 'Registration not approved', body: ok ? `${h.name} is now visible to donors.` : `${h.name} was not approved.`, path: '/admin',
+        notes.push({ to: await managers(ev.homeId), title: ok ? 'Your home is approved 🎉' : 'Registration not approved', body: ok ? `${h.name} is now visible to donors.` : `${h.name} was not approved.`, path: '/admin',
           email: { subject: ok ? `${h.name} is approved on CareBridge` : 'CareBridge registration not approved', lines: ok ? [`Good news! ${h.name} is now visible to donors.`, 'Add or update your wishlist so donors know what you need.'] : [`${h.name} was not approved. Please contact the CareBridge team for details.`] } });
       }
+    }
+  }
+
+  if (ev.type === 'invite.created' && ev.email) {
+    const inv = (await a.db.doc(`invites/${ev.email}`).get()).data();
+    if (inv && inv.invitedBy === caller) {
+      const what = inv.role === 'platformAdmin' ? 'a CareBridge platform admin' : `a manager of ${inv.homeName} on CareBridge`;
+      notes.push({ to: [], toEmail: ev.email, title: '', body: '', path: inv.role === 'platformAdmin' ? '/platform' : '/admin',
+        email: { subject: `You're invited to be ${what}`, lines: [`${inv.invitedByName} added you as ${what}.`, `Sign in with Google using this email address (${ev.email}). If you use email and password instead, confirm your email first using the link we sent when you signed up.`] } });
     }
   }
 
   let pushed = 0;
   let emailed = 0;
   for (const n of notes) {
+    if (n.toEmail && mailer && n.email) {
+      const link = `${appUrl}/login`;
+      try {
+        await mailer.sendMail({ from: `CareBridge <${process.env.SMTP_USER}>`, to: n.toEmail, subject: n.email.subject, text: `${n.email.lines.join('\n\n')}\n\n${link}`, html: emailHtml(n.email.lines, link, 'Sign in to CareBridge') });
+        emailed++;
+      } catch (e) {
+        console.error('email failed', e);
+      }
+    }
     for (const uid of n.to) {
       const u = await a.db.doc(`users/${uid}`).get();
       const data = u.data() ?? {};

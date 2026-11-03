@@ -86,3 +86,14 @@ export interface Pledge {
 export type NewHome = Pick<Home, 'name' | 'type' | 'area' | 'about' | 'address' | 'dropoffHours' | 'photo'>;
 export type NewItem = Pick<WishlistItem, 'name' | 'category' | 'priority' | 'neededBy' | 'qtyNeeded' | 'image'>;
 export type NewPledge = { itemId: string; quantity: number; dropoffDate: string; contactName: string; contactPhone: string };
+
+/** Invite to become a platform admin or a manager of a home. Doc id = the invited email. */
+export interface Invite {
+  email: string;
+  role: 'platformAdmin' | 'homeAdmin';
+  homeId?: string | null;
+  homeName?: string | null;
+  invitedBy: string;
+  invitedByName: string;
+  createdAt: number;
+}

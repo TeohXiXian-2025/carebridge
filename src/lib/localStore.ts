@@ -1,4 +1,4 @@
-import type { Home, Pledge, UserProfile, WishlistItem } from './types';
+import type { Home, Invite, Pledge, UserProfile, WishlistItem } from './types';
 import { applyPledge, applyReceived, applyRelease, bump, UserError, type Store } from './store';
 import { calcStatus, canPledge, makePledgeNo, stillNeeded } from './logic';
 import { DEMO_PASSWORD, DEMO_USERS, seedHomes, seedItems, seedPledges } from './seed';
@@ -8,7 +8,7 @@ import { DEMO_PASSWORD, DEMO_USERS, seedHomes, seedItems, seedPledges } from './
  * Used when no Firebase config is set, so the app can be clicked through and tested offline.
  */
 const KEY = 'carebridge-demo-v1';
-type DB = { users: (UserProfile & { password: string })[]; homes: Home[]; items: WishlistItem[]; pledges: Pledge[]; session: string | null };
+type DB = { users: (UserProfile & { password: string })[]; homes: Home[]; items: WishlistItem[]; pledges: Pledge[]; invites?: Invite[]; session: string | null };
 
 function fresh(): DB {
   const homes = seedHomes();
@@ -54,6 +54,14 @@ export function createLocalStore(): Store {
     bump();
   };
   const emitAuth = () => authListeners.forEach((l) => l(me()));
+  /** Same as the live app: a donor whose email has an invite gets that role on sign-in. */
+  const acceptInvite = (u: UserProfile & { password: string }) => {
+    const inv = (db.invites ?? []).find((i) => i.email === u.email);
+    if (!inv || u.role !== 'donor') return;
+    u.role = inv.role;
+    u.homeId = inv.role === 'homeAdmin' ? inv.homeId ?? null : null;
+    db.invites = (db.invites ?? []).filter((i) => i !== inv);
+  };
   const item = (id: string) => {
     const i = db.items.find((x) => x.id === id);
     if (!i) throw new UserError('Item not found.');
@@ -79,6 +87,7 @@ export function createLocalStore(): Store {
       if (password.length < 6) throw new UserError('Password must be at least 6 characters.');
       const u = { id: uid('u'), email, fullName, phone, role: 'donor' as const, homeId: null, password };
       db.users.push(u);
+      acceptInvite(u);
       db.session = u.id;
       commit();
       emitAuth();
@@ -87,6 +96,7 @@ export function createLocalStore(): Store {
       await tick();
       const u = db.users.find((x) => x.email === email.trim().toLowerCase());
       if (!u || u.password !== password) throw new UserError('Wrong email or password.');
+      acceptInvite(u);
       db.session = u.id;
       commit();
       emitAuth();
@@ -139,7 +149,7 @@ export function createLocalStore(): Store {
       return db.pledges.filter((p) => p.donorId === u);
     },
     async homePledges(user) {
-      return db.pledges.filter((p) => p.homeAdminId === user.id);
+      return db.pledges.filter((p) => p.homeId === user.homeId);
     },
     async allPledges() {
       return [...db.pledges];
@@ -225,6 +235,42 @@ export function createLocalStore(): Store {
       Object.assign(p, { status: 'Received', qtyReceived: delivered, receivedAt: Date.now() });
       commit();
       return { ...p };
+    },
+
+    async platformAdmins() {
+      return db.users.filter((u) => u.role === 'platformAdmin').map(pub);
+    },
+    async homeManagers(homeId) {
+      return db.users.filter((u) => u.role === 'homeAdmin' && u.homeId === homeId).map(pub);
+    },
+    async invites({ role, homeId }) {
+      return (db.invites ?? []).filter((i) => i.role === role && (!homeId || i.homeId === homeId));
+    },
+    async invite(by, rawEmail, role, home) {
+      await tick();
+      const email = rawEmail.trim().toLowerCase();
+      if (!/^\S+@\S+\.\S+$/.test(email)) throw new UserError('Enter a valid email address.');
+      const u = db.users.find((x) => x.email === email);
+      if (u && u.role !== 'donor') throw new UserError('This account already manages a home or the platform. Remove it there first.');
+      if (u && by.role === 'platformAdmin') {
+        u.role = role;
+        u.homeId = role === 'homeAdmin' ? home?.id ?? null : null;
+        commit();
+        return 'added';
+      }
+      db.invites = [...(db.invites ?? []).filter((i) => i.email !== email), { email, role, homeId: home?.id ?? null, homeName: home?.name ?? null, invitedBy: by.id, invitedByName: by.fullName, createdAt: Date.now() }];
+      commit();
+      return 'invited';
+    },
+    async cancelInvite(email) {
+      db.invites = (db.invites ?? []).filter((i) => i.email !== email);
+      commit();
+    },
+    async demote(id) {
+      const u = db.users.find((x) => x.id === id);
+      if (u) Object.assign(u, { role: 'donor', homeId: null });
+      commit();
+      if (id === db.session) emitAuth();
     },
   };
 }

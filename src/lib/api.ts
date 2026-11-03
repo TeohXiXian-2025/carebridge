@@ -6,7 +6,10 @@ import type { Store } from './store';
 const base: Store = hasFirebase ? createFirebaseStore() : createLocalStore();
 
 /** Asks the server function to send the app + email notification (Firebase mode only). Never blocks the user's action. */
-type PushEvent = { type: 'pledge.created' | 'pledge.accepted' | 'pledge.declined' | 'pledge.cancelled' | 'pledge.received'; pledgeId: string } | { type: 'home.registered' | 'home.reviewed'; homeId: string };
+type PushEvent =
+  | { type: 'pledge.created' | 'pledge.accepted' | 'pledge.declined' | 'pledge.cancelled' | 'pledge.received'; pledgeId: string }
+  | { type: 'home.registered' | 'home.reviewed'; homeId: string }
+  | { type: 'invite.created'; email: string };
 async function notify(ev: PushEvent) {
   if (!hasFirebase) return;
   try {
@@ -40,6 +43,11 @@ export const api: Store = {
     const p = await base.setPledgeStatus(id, status);
     void notify({ type: status === 'Accepted' ? 'pledge.accepted' : status === 'Declined' ? 'pledge.declined' : 'pledge.cancelled', pledgeId: id });
     return p;
+  },
+  async invite(by, email, role, home) {
+    const r = await base.invite(by, email, role, home);
+    void notify({ type: 'invite.created', email: email.trim().toLowerCase() });
+    return r;
   },
   async markReceived(id, delivered) {
     const p = await base.markReceived(id, delivered);

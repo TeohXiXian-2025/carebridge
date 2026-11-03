@@ -8,6 +8,7 @@ import type { Home } from '../../lib/types';
 import { useData, useIsDesktop } from '../../lib/useData';
 import { PageHeader } from '../admin/AdminShell';
 import { AccountSettings } from '../../components/AccountSettings';
+import { ManagersPanel } from '../../components/ManagersPanel';
 
 const Shell = ({ children }: { children: React.ReactNode }) => (
   <RequireRole role="platformAdmin">
@@ -169,6 +170,64 @@ export function Overview() {
             </div>
           );
         })
+      )}
+    </Shell>
+  );
+}
+
+/** Platform admins (add / remove by email) and your own account settings. */
+export function PlatformAdmins() {
+  return (
+    <Shell>
+      <PageHeader title="Admins" sub="Who can approve homes, and your own settings" />
+      <div className="stack" style={{ maxWidth: 640 }}>
+        <ManagersPanel />
+        <AccountSettings />
+      </div>
+    </Shell>
+  );
+}
+
+/** All homes, with each home's managers (change the Gmail linked to a home). */
+export function PlatformHomes() {
+  const desktop = useIsDesktop();
+  const [open, setOpen] = useState<Home | null>(null);
+  const { data: homes } = useData(() => api.allHomes(), []);
+  const list = (homes ?? []).sort((a, b) => a.name.localeCompare(b.name));
+  const statusTag = (h: Home) => <Tag cls={h.status === 'Approved' ? 't-green' : h.status === 'Pending' ? 't-yel' : 't-red'}>{h.status}</Tag>;
+  return (
+    <Shell>
+      <PageHeader title="Homes" sub="Every registered home. Use Managers to change which Gmail runs a home." />
+      {!homes ? <Spinner /> : desktop ? (
+        <table className="table">
+          <thead><tr><th>Home</th><th>Type</th><th>Area</th><th>Status</th><th>Public contact</th><th>Actions</th></tr></thead>
+          <tbody>
+            {list.map((h) => (
+              <tr key={h.id}>
+                <td><Link to={`/homes/${h.id}`} style={{ fontWeight: 600 }}>{h.name}</Link></td><td>{h.type}</td><td>{h.area}</td><td>{statusTag(h)}</td>
+                <td className="small">{h.notifyEmail || '—'}</td>
+                <td><button className="btn btn-sm btn-plain" onClick={() => setOpen(h)}>Managers</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        list.map((h) => (
+          <div key={h.id} className="card between" style={{ borderRadius: 14 }}>
+            <div className="grow" style={{ minWidth: 0 }}><b>{h.name}</b><p className="small">{h.type} · {h.area}</p></div>
+            {statusTag(h)}
+            <button className="btn btn-sm btn-plain" onClick={() => setOpen(h)}>Managers</button>
+          </div>
+        ))
+      )}
+      {open && (
+        <div className="overlay" onClick={() => setOpen(null)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="grab" />
+            <div className="between"><h2 style={{ fontWeight: 800 }}>{open.name}</h2><button className="x" onClick={() => setOpen(null)} aria-label="Close">×</button></div>
+            <ManagersPanel home={open} />
+          </div>
+        </div>
       )}
     </Shell>
   );

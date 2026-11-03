@@ -5,69 +5,103 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function uid() { return request.auth.uid; }
-    function userDoc(id) { return /databases/$(database)/documents/users/$(id); }
-    function isPlatform() { return signedIn() && exists(userDoc(uid())) && get(userDoc(uid())).data.role == 'platformAdmin'; }
+    function userPath(id) { return /databases/$(database)/documents/users/$(id); }
+    function homePath(id) { return /databases/$(database)/documents/homes/$(id); }
+    function itemPath(id) { return /databases/$(database)/documents/items/$(id); }
+    function invitePath(e) { return /databases/$(database)/documents/invites/$(e); }
+    function me() { return get(userPath(uid())).data; }
+    function hasProfile() { return signedIn() && exists(userPath(uid())); }
+    function isPlatform() { return hasProfile() && me().role == 'platformAdmin'; }
+    /** True when the signed-in user is one of the managers of this home. A home can have several. */
+    function managesHome(homeId) { return hasProfile() && me().role == 'homeAdmin' && me().homeId == homeId; }
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
-    // Platform admins don't sign up: these Google-verified emails become platform admins on first sign-in.
+
+    // First platform admin (bootstrap). More are added in the app (Platform → Admins) through invites.
     // Keep in sync with src/lib/admins.ts.
     function platformAdminEmails() { return ['xixianteoh@gmail.com']; }
+    // Invites only count for an email the sign-in provider has verified (Google, or email after the link is clicked).
     function verifiedEmail() { return request.auth.token.email_verified == true ? request.auth.token.email.lower() : ''; }
+    function myInvite() { return get(invitePath(verifiedEmail())).data; }
+    function hasInvite() { return signedIn() && verifiedEmail() != '' && exists(invitePath(verifiedEmail())); }
+    /** The role (and home) being written for this user is what an invite or the bootstrap list allows. */
+    function grantedRole() {
+      return (request.resource.data.role == 'platformAdmin'
+              && (verifiedEmail() in platformAdminEmails() || (hasInvite() && myInvite().role == 'platformAdmin'))
+              && request.resource.data.homeId == null)
+          || (request.resource.data.role == 'homeAdmin' && hasInvite() && myInvite().role == 'homeAdmin'
+              && request.resource.data.homeId == myInvite().homeId);
+    }
 
     match /users/{userId} {
-      allow read: if signedIn() && (uid() == userId || isPlatform());
-      // New accounts are donors, except the listed platform admin emails.
-      allow create: if signedIn() && uid() == userId && request.resource.data.homeId == null
-        && (request.resource.data.role == 'donor'
-            || (request.resource.data.role == 'platformAdmin' && verifiedEmail() in platformAdminEmails()));
-      allow update: if isPlatform() || (signedIn() && uid() == userId && (
-          !changed().hasAny(['role', 'homeId'])
-          // A listed admin email that first signed up as a donor is upgraded on its next Google sign-in.
-          || (resource.data.role == 'donor' && request.resource.data.role == 'platformAdmin'
-              && changed().hasOnly(['role']) && verifiedEmail() in platformAdminEmails())
-          // W8: a donor becomes the admin of the home they are registering in the same batch.
-          || (resource.data.role == 'donor' && request.resource.data.role == 'homeAdmin'
-              && changed().hasOnly(['role', 'homeId'])
-              && getAfter(/databases/$(database)/documents/homes/$(request.resource.data.homeId)).data.adminId == uid())
-        ));
+      allow read: if signedIn() && (uid() == userId || isPlatform()
+        // co-managers of the same home can see each other (Home managers list)
+        || (resource.data.role == 'homeAdmin' && managesHome(resource.data.homeId)));
+      allow create: if signedIn() && uid() == userId
+        && ((request.resource.data.role == 'donor' && request.resource.data.homeId == null) || grantedRole());
+      allow update: if isPlatform()
+        || (signedIn() && uid() == userId && (
+            !changed().hasAny(['role', 'homeId'])
+            // Accept an invite or bootstrap admin email.
+            || (resource.data.role == 'donor' && changed().hasOnly(['role', 'homeId']) && grantedRole())
+            // W8: a donor becomes a manager of the home they are registering in the same batch.
+            || (resource.data.role == 'donor' && request.resource.data.role == 'homeAdmin'
+                && changed().hasOnly(['role', 'homeId'])
+                && getAfter(homePath(request.resource.data.homeId)).data.adminId == uid())
+            // Leave a home (hand it over): manager goes back to donor.
+            || (resource.data.role == 'homeAdmin' && request.resource.data.role == 'donor' && request.resource.data.homeId == null
+                && changed().hasOnly(['role', 'homeId']))
+          ))
+        // A manager removes another manager of the same home.
+        || (signedIn() && uid() != userId && resource.data.role == 'homeAdmin' && managesHome(resource.data.homeId)
+            && request.resource.data.role == 'donor' && request.resource.data.homeId == null && changed().hasOnly(['role', 'homeId']));
+    }
+
+    match /invites/{email} {
+      // Doc id = invited email (lower case). role: platformAdmin | homeAdmin; homeId for home managers.
+      allow read: if isPlatform() || verifiedEmail() == email
+        || (signedIn() && resource.data.role == 'homeAdmin' && managesHome(resource.data.homeId));
+      allow create: if signedIn() && request.resource.data.invitedBy == uid() && email == email.lower() && (
+          (isPlatform() && request.resource.data.role in ['platformAdmin', 'homeAdmin'])
+          || (request.resource.data.role == 'homeAdmin' && managesHome(request.resource.data.homeId)));
+      allow delete: if isPlatform() || verifiedEmail() == email
+        || (signedIn() && resource.data.role == 'homeAdmin' && managesHome(resource.data.homeId));
     }
 
     match /homes/{homeId} {
-      allow read: if resource.data.status == 'Approved'
-        || (signedIn() && (resource.data.adminId == uid() || isPlatform()));
+      allow read: if resource.data.status == 'Approved' || isPlatform() || managesHome(homeId)
+        || (signedIn() && resource.data.adminId == uid());
       allow create: if signedIn() && request.resource.data.adminId == uid() && request.resource.data.status == 'Pending';
-      // Home admins edit their profile; only platform admins approve or reject.
+      // Managers edit the profile; only platform admins approve or reject.
       allow update: if isPlatform()
-        || (signedIn() && resource.data.adminId == uid() && !changed().hasAny(['status', 'adminId', 'reviewedAt', 'createdAt']));
+        || (managesHome(homeId) && !changed().hasAny(['status', 'adminId', 'reviewedAt', 'createdAt']));
     }
 
     match /items/{itemId} {
-      allow read: if resource.data.homeApproved == true
-        || (signedIn() && (resource.data.homeAdminId == uid() || isPlatform()));
-      allow create: if signedIn() && request.resource.data.homeAdminId == uid()
-        && get(userDoc(uid())).data.homeId == request.resource.data.homeId
-        && request.resource.data.homeApproved == (get(/databases/$(database)/documents/homes/$(request.resource.data.homeId)).data.status == 'Approved')
+      allow read: if resource.data.homeApproved == true || isPlatform() || managesHome(resource.data.homeId);
+      allow create: if managesHome(request.resource.data.homeId)
+        && request.resource.data.homeApproved == (get(homePath(request.resource.data.homeId)).data.status == 'Approved')
         && request.resource.data.qtyPledged == 0 && request.resource.data.qtyReceived == 0;
       allow update: if isPlatform()
-        || (signedIn() && resource.data.homeAdminId == uid() && !changed().hasAny(['homeId', 'homeAdminId', 'homeApproved']))
+        || (managesHome(resource.data.homeId) && !changed().hasAny(['homeId', 'homeApproved']))
         // Donor pledge workflows (W1, W4) may only move the pledged count and status, within range.
         || (signedIn() && resource.data.homeApproved == true && changed().hasOnly(['qtyPledged', 'status'])
             && request.resource.data.qtyPledged >= 0 && request.resource.data.qtyPledged <= resource.data.qtyNeeded);
     }
 
     match /pledges/{pledgeId} {
-      allow read: if signedIn() && (resource.data.donorId == uid() || resource.data.homeAdminId == uid() || isPlatform());
+      allow read: if signedIn() && (resource.data.donorId == uid() || isPlatform() || managesHome(resource.data.homeId));
       allow create: if signedIn() && request.resource.data.donorId == uid()
         && request.resource.data.status == 'Pending' && request.resource.data.quantity > 0
-        && request.resource.data.homeAdminId == get(/databases/$(database)/documents/items/$(request.resource.data.itemId)).data.homeAdminId
+        && request.resource.data.homeId == get(itemPath(request.resource.data.itemId)).data.homeId
         // The item's pledged count must go up by exactly this pledge, in the same transaction.
-        && getAfter(/databases/$(database)/documents/items/$(request.resource.data.itemId)).data.qtyPledged
-           == get(/databases/$(database)/documents/items/$(request.resource.data.itemId)).data.qtyPledged + request.resource.data.quantity;
+        && getAfter(itemPath(request.resource.data.itemId)).data.qtyPledged
+           == get(itemPath(request.resource.data.itemId)).data.qtyPledged + request.resource.data.quantity;
       allow update: if isPlatform()
         // W4: donor cancels.
         || (signedIn() && resource.data.donorId == uid() && changed().hasOnly(['status'])
             && request.resource.data.status == 'Cancelled' && resource.data.status in ['Pending', 'Accepted'])
-        // W2/W3/W5: home admin accepts, declines, marks received.
-        || (signedIn() && resource.data.homeAdminId == uid() && changed().hasOnly(['status', 'qtyReceived', 'receivedAt'])
+        // W2/W3/W5: a home manager accepts, declines, marks received.
+        || (managesHome(resource.data.homeId) && changed().hasOnly(['status', 'qtyReceived', 'receivedAt'])
             && ((resource.data.status == 'Pending' && request.resource.data.status in ['Accepted', 'Declined'])
                 || (resource.data.status == 'Accepted' && request.resource.data.status == 'Received')));
     }

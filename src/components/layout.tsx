@@ -110,8 +110,8 @@ export const HOME_ADMIN_NAV: NavItem[] = [
 export const PLATFORM_NAV: NavItem[] = [
   { to: '/platform', label: 'Approvals', icon: Icon.check, end: true },
   { to: '/platform/overview', label: 'Overview', icon: Icon.chart },
-  { to: '/platform/account', label: 'Account', icon: Icon.profile },
-  { to: '/homes', label: 'Public site', icon: Icon.homes },
+  { to: '/platform/homes', label: 'Homes', icon: Icon.homes },
+  { to: '/platform/admins', label: 'Admins', icon: Icon.users },
 ];
 
 /** Admin pages: sidebar on desktop, header + bottom tab bar on phones. */

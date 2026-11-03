@@ -17,6 +17,7 @@ Figma: https://www.figma.com/design/jHmYLe3TR7fmlCwH4OWXkK
 
 **Sign-in:** "Continue with Google" (main) or email + password. Donors and welfare homes sign up themselves; at sign-up they choose **A donor** or **A welfare home**.
 A welfare home's account fills in the home form right after sign-up, and the home is linked to that Google account / email (one home per account).
+**Managers.** A home can have several managers (Home profile → Home managers: add by Gmail/email, remove, or hand over = add the new person, then Leave). Platform admins manage the admin list on Platform → Admins, and any home's managers on Platform → Homes. Invited emails join on their first sign-in with that (verified) email; at least one manager/admin must remain.
 **Platform admins don't sign up.** Listed emails (now: xixianteoh@gmail.com) become Platform Admin automatically on their first Google sign-in. Bubble: set the role in the data editor.
 
 ## 2. Option sets (fixed values)
@@ -34,7 +35,9 @@ A welfare home's account fills in the home form right after sign-up, and the hom
 
 ## 3. Data types
 
-**User**: email, fullName, phone, role (Role), homeId (→ Home, home admins only)
+**User**: email, fullName, phone, role (Role), homeId (→ Home, home managers only), emailNotifications (yes/no)
+
+**Invite**: email (= id), role (platformAdmin / homeAdmin), homeId, homeName, invitedBy, createdAt
 
 **Home**: name, type (HomeType), area (Area), about, address, dropoffHours, photo, status (HomeStatus), adminId (→ User), createdAt, reviewedAt
 
@@ -86,7 +89,8 @@ Where qtyPledged counts quantities from pledges that are Pending, Accepted or Re
 |---|---|
 | Home | Everyone sees Approved homes. Its own admin and Platform Admins always. Only Platform Admins change status. |
 | WishlistItem | Everyone sees items where homeApproved = yes. Its home admin and Platform Admins always. Only its home admin edits (donor pledge workflows may change qtyPledged and status only). |
-| Pledge | Its donor, its home's admin, Platform Admins. |
+| Pledge | Its donor, its home's managers, Platform Admins. |
+| Invite | Platform Admins; the home's managers (for that home); the invited email. |
 | User | Own record, and Platform Admins. Phone/email never shown publicly. |
 | Admin pages | Redirect anyone whose role is wrong. |
 
