@@ -14,7 +14,7 @@
   // ---------- D5 Pledge sent ----------
   {
     const p = () => URL('pledge', 'custom.pledge');
-    const kv = (n, k, v) => B.G(n, { row: 1, cva: 'center' }, [B.Sm(n + ' K', k, { fs: 13 }), B.T(n + ' V', v, { fwt: 700, fs: 14, ta: 'right', p: { horiz_alignment: 'flex-end' } })]);
+    const kv = (n, k, v) => B.G(n, { row: 1, cva: 'center' }, [B.Sm(n + ' K', k, { fs: 13 }), B.T(n + ' V', v, { fwt: 700, fs: 14, ta: 'right' })]);
     const card = typed(B.Card('Sent Card', { type: 'pledge', ds: p(), gap: 18, pad: 40, r: 20, maxw: 560, ha: 'center', when: [mob({ pad: 24 })] }, [
       B.G('Check Circle', { w: 88, h: 88, r: 44, bg: 'greenbg', col: 1, cva: 'center', ha: 'center' }, [B.T('Check Mark', '✓', { fs: 36, fwt: 800, fc: 'green', ta: 'center', ha: 'center', fw: true })]),
       B.H1('Sent Title', 'Pledge sent!', { fs: 30, ta: 'center', ha: 'center', fw: true }),
