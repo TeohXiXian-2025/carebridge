@@ -76,6 +76,13 @@
   // In-app notification + email (email only when address present)
   const notify = (to, title, body, path, extra = {}) => A.create('notification', { ...to, title_text: TX(title), body_text: typeof body === 'string' ? TX(body) : body, path_text: TX(path), read_boolean: false, ...extra });
 
+  // Home photo tile (photo if set, else gradient + initials like the coded app). base() -> Home expression
+  const PH_JS = '<script>(function(){if(window.cbPh)return;window.cbPh=1;var G=[["#BFDCD5","#8FC3B7"],["#F6D9B8","#EDB27C"],["#D7D0F0","#A99AD9"],["#C9E4F2","#8EC1DE"],["#FBE0C8","#F2B98A"]];function run(){document.querySelectorAll(".cbph").forEach(function(e){var n=e.getAttribute("data-n")||"",p=e.getAttribute("data-p")||"",id=e.getAttribute("data-id")||n,k=n+"|"+p;if(e.getAttribute("data-k")===k)return;e.setAttribute("data-k",k);if(p){e.style.background="center/cover no-repeat url(\'"+(p.indexOf("//")===0?"https:"+p:p)+"\')";e.textContent=""}else{var h=0;for(var i=0;i<id.length;i++)h=(h*31+id.charCodeAt(i))>>>0;var g=G[h%5];e.style.background="linear-gradient(90deg,"+g[0]+","+g[1]+")";e.textContent=n.replace(/[^A-Za-z ]/g,"").split(" ").filter(function(w){return w&&["of","the","home","Home"].indexOf(w)<0}).slice(0,2).map(function(w){return w[0]}).join("").toUpperCase()}})}run();setInterval(run,400)})()</script>';
+  const photo = (name, base, o = {}) => {
+    const h = o.h || 140, r = o.r ?? 14, f = o.f || 26, w = o.w ? o.w + 'px' : '100%';
+    return B.Html(name, TX('<div class="cbph" data-n="', chain(base(), 'name_text'), '" data-id="', chain(base(), '_id'), '" data-p="', chain(base(), 'photo_image'), '" style="width:' + w + ';height:' + h + 'px;border-radius:' + r + 'px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:' + f + 'px;background:#E3F2EF"></div>' + PH_JS), { minh: h, ...(o.w ? { w: o.w, minw: o.w } : {}), ...(o.el || {}) });
+  };
+
   const loggedIn = () => CU('logged_in');
   const notLoggedIn = () => chain(CU('logged_in'), X.eq(false));
   // Give every untyped group inside a cell the cell's type, so "Parent group's thing" works at any depth.
@@ -85,5 +92,5 @@
     w(root); return root;
   }
 
-  window.CBC = { shell, bar, still, pctItem, itemStatusTag, pledgeStatusTag, homeStatusTag, priorityTag, chip, recalc, notify, loggedIn, notLoggedIn, tagColors, typed };
+  window.CBC = { shell, bar, still, pctItem, itemStatusTag, pledgeStatusTag, homeStatusTag, priorityTag, chip, recalc, notify, loggedIn, notLoggedIn, tagColors, typed, photo };
 })();
