@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { PushPrompt } from './layout';
+import { hasFirebase } from '../lib/firebase';
+import { pushState, sendTestPush, syncPushToken } from '../lib/pushClient';
 import { Field, useToast } from './ui';
 
 /** Name, phone and notification settings – shown to every role. */
@@ -11,7 +13,17 @@ export function AccountSettings({ logout = false }: { logout?: boolean }) {
   const [name, setName] = useState(user?.fullName ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
   const [busy, setBusy] = useState(false);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
   if (!user) return null;
+  const pushOn = pushState() === 'granted';
+  const test = async () => {
+    setTestMsg('Sending…');
+    await syncPushToken(user.id);
+    const r = await sendTestPush();
+    if ('error' in r) setTestMsg(`Could not send: ${r.error}`);
+    else if (r.devices === 0) setTestMsg('No device is registered for this account yet. Tap Turn on (above) on each phone or computer, then try again.');
+    else setTestMsg(`Sent to ${r.pushed} of ${r.devices} registered device${r.devices === 1 ? '' : 's'}. It should appear within a few seconds – try closing the app first.`);
+  };
   const emailOn = user.emailNotifications !== false;
 
   const save = async () => {
@@ -50,6 +62,13 @@ export function AccountSettings({ logout = false }: { logout?: boolean }) {
         <button className={`toggle${emailOn ? ' on' : ''}`} aria-pressed={emailOn} aria-label="Email notifications" onClick={toggleEmail} />
       </div>
       <PushPrompt text="App notifications on this device are off." />
+      {pushOn && <p className="small">App notifications are <b style={{ color: 'var(--green)' }}>on</b> for this device.</p>}
+      {hasFirebase && (
+        <div className="stack" style={{ gap: 6 }}>
+          <button className="btn btn-sm btn-plain" style={{ alignSelf: 'flex-start' }} onClick={test}>Send a test notification</button>
+          {testMsg && <p className="small">{testMsg}</p>}
+        </div>
+      )}
       {logout && (
         <button className="btn btn-muted btn-block hide-d" onClick={() => api.signOut()}>
           Log out

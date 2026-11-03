@@ -3,7 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { ToastProvider } from './components/ui';
 import { RequireRole } from './components/layout';
 import { AuthProvider, useAuth } from './lib/auth';
-import { listenForeground } from './lib/pushClient';
+import { listenForeground, syncPushToken } from './lib/pushClient';
 import HomePage from './pages/Home';
 import Directory from './pages/Directory';
 import HomeProfile from './pages/HomeProfile';
@@ -28,8 +28,10 @@ function ScrollTop() {
 function Foreground() {
   const { user } = useAuth();
   useEffect(() => {
-    if (user) void listenForeground();
-  }, [user]);
+    if (!user) return;
+    // Every app start: make sure this device's push token is saved for this account.
+    void syncPushToken(user.id).then(() => listenForeground());
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
 

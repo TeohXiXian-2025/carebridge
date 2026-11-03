@@ -7,12 +7,14 @@ if (config.apiKey) {
   firebase.initializeApp(config);
   const messaging = firebase.messaging();
   messaging.onBackgroundMessage((m) => {
+    const d = m.data || {};
     const n = m.notification || {};
-    self.registration.showNotification(n.title || 'CareBridge', {
-      body: n.body || '',
+    return self.registration.showNotification(d.title || n.title || 'CareBridge', {
+      body: d.body || n.body || '',
       icon: '/icon-192.png',
       badge: '/icon-192.png',
-      data: { url: (m.data && m.data.url) || '/' },
+      tag: (d.title || 'carebridge') + ':' + (d.body || ''),
+      data: { url: d.url || '/' },
     });
   });
 }

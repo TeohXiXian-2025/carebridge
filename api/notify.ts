@@ -170,6 +170,9 @@ async function main(req: Req, res: Res) {
     }
   }
 
+  if (ev.type === 'test') {
+    notes.push({ to: [caller], title: 'CareBridge test notification ✅', body: 'App notifications are working on this device.', path: '/profile' });
+  }
   if (ev.type === 'invite.created' && ev.email) {
     const inv = (await a.db.doc(`invites/${ev.email}`).get()).data();
     if (inv && inv.invitedBy === caller) {
@@ -181,6 +184,7 @@ async function main(req: Req, res: Res) {
 
   let pushed = 0;
   let emailed = 0;
+  let devices = 0;
   for (const n of notes) {
     if (n.toEmail && mailer && n.email) {
       const link = `${appUrl}/login`;
@@ -196,8 +200,14 @@ async function main(req: Req, res: Res) {
       const data = u.data() ?? {};
       const link = `${appUrl}${n.path}`;
       const tokens: string[] = data.fcmTokens ?? [];
+      devices += tokens.length;
       if (tokens.length) {
-        const r = await a.messaging.sendEachForMulticast({ tokens, notification: { title: n.title, body: n.body }, data: { url: n.path }, webpush: { fcmOptions: { link } } });
+        const r = await a.messaging.sendEachForMulticast({
+          tokens,
+          // Data-only: the phone's service worker shows it, so it appears exactly once on every browser.
+          data: { title: n.title, body: n.body, url: n.path },
+          webpush: { headers: { Urgency: 'high', TTL: '86400' }, fcmOptions: { link } },
+        });
         pushed += r.successCount;
         const dead = tokens.filter((_, i) => /not-registered|invalid-registration-token/.test(r.responses[i].error?.code ?? ''));
         if (dead.length) await u.ref.update({ fcmTokens: FieldValue.arrayRemove(...dead) });
@@ -212,7 +222,7 @@ async function main(req: Req, res: Res) {
       }
     }
   }
-  return res.status(200).json({ ok: true, pushed, emailed });
+  return res.status(200).json({ ok: true, pushed, emailed, devices });
 }
 
 export default async function handler(req: Req, res: Res) {
