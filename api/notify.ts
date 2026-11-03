@@ -27,7 +27,10 @@ function admin() {
   if (!getApps().length) {
     const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
     if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT is not set');
-    initializeApp({ credential: cert(JSON.parse(raw)) });
+    const sa = JSON.parse(raw.trim());
+    // Pasting into dashboards sometimes turns the key's line breaks into the text "\\n".
+    if (typeof sa.private_key === 'string') sa.private_key = sa.private_key.replace(/\\n/g, '\n');
+    initializeApp({ credential: cert(sa) });
   }
   return { auth: getAuth(), db: getFirestore(), messaging: getMessaging() };
 }
@@ -51,17 +54,37 @@ function emailHtml(lines: string[], link: string, button: string) {
 }
 const fmtDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long' });
 
-export default async function handler(req: Req, res: Res) {
-  // GET = setup check, shows only whether each part is configured (never the secrets).
+async function main(req: Req, res: Res) {
+  // GET = self-test. Shows only whether each part works (never the secrets).
   if (req.method === 'GET') {
-    let push = false;
+    const out: Record<string, unknown> = { serviceAccountSet: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT), emailConfigured: Boolean(mailer) };
     try {
-      admin();
-      push = true;
-    } catch {
-      push = false;
+      const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
+      out.serviceAccountProject = sa.project_id ?? null;
+      out.privateKeyLooksOk = typeof sa.private_key === 'string' && sa.private_key.includes('BEGIN PRIVATE KEY') && sa.private_key.includes('END PRIVATE KEY');
+    } catch (e) {
+      out.serviceAccountJson = `not valid JSON: ${(e as Error).message}`;
     }
-    return res.status(200).json({ pushConfigured: push, emailConfigured: Boolean(mailer), sender: process.env.SMTP_USER ? process.env.SMTP_USER.replace(/^(.{2}).*(@.*)$/, '$1***$2') : null });
+    try {
+      const a = admin();
+      await a.db.collection('users').limit(1).get();
+      out.firestore = 'ok';
+      await a.messaging.send({ token: 'self-test-invalid-token', notification: { title: 't' } }, true).catch((e: { code?: string; message?: string }) => {
+        // An "invalid token" answer means FCM itself is reachable and the key works.
+        out.messaging = /registration-token|invalid-argument/i.test(String(e?.code ?? '') + (e?.message ?? '')) ? 'ok' : `${e?.code ?? ''} ${e?.message ?? ''}`.trim();
+      });
+    } catch (e) {
+      out.firestore = `failed: ${(e as Error).message}`;
+    }
+    if (mailer) {
+      try {
+        await mailer.verify();
+        out.email = 'ok';
+      } catch (e) {
+        out.email = `failed: ${(e as Error).message}`;
+      }
+    }
+    return res.status(200).json(out);
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   let a: ReturnType<typeof admin>;
@@ -178,4 +201,13 @@ export default async function handler(req: Req, res: Res) {
     }
   }
   return res.status(200).json({ ok: true, pushed, emailed });
+}
+
+export default async function handler(req: Req, res: Res) {
+  try {
+    return await main(req, res);
+  } catch (e) {
+    console.error('notify failed', e);
+    return res.status(500).json({ error: (e as Error)?.message ?? String(e) });
+  }
 }
