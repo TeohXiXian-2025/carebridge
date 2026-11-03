@@ -1,4 +1,4 @@
-import type { Home, Invite, NewHome, NewItem, NewPledge, Pledge, UserProfile, WishlistItem } from './types';
+import type { AppNotification, Home, Invite, NewHome, NewItem, NewNotification, NewPledge, Pledge, UserProfile, WishlistItem } from './types';
 import { calcStatus } from './logic';
 
 export interface Store {
@@ -26,7 +26,10 @@ export interface Store {
 
   registerHome(user: UserProfile, data: NewHome & { notifyEmail: string }): Promise<string>;
   updateHome(id: string, data: Partial<NewHome> & { notifyEmail?: string }): Promise<void>;
-  reviewHome(id: string, approve: boolean): Promise<void>;
+  /** Platform admin sets any status (approve, reject with a reason, or back to pending). */
+  setHomeStatus(id: string, status: Home['status'], note?: string): Promise<void>;
+  /** A rejected home's manager asks for review again (W11). */
+  resubmitHome(id: string): Promise<void>;
   addItem(user: UserProfile, home: Home, data: NewItem): Promise<void>;
   updateItem(id: string, data: Partial<NewItem>): Promise<void>;
   setPaused(id: string, paused: boolean): Promise<void>;
@@ -43,6 +46,11 @@ export interface Store {
   cancelInvite(email: string): Promise<void>;
   /** Back to an ordinary donor account: remove a manager or admin, or leave a home yourself. */
   demote(uid: string): Promise<void>;
+
+  /* In-app notifications (the bell), updated live. */
+  watchNotifications(user: UserProfile, cb: (list: AppNotification[]) => void): () => void;
+  addNotification(by: UserProfile, n: NewNotification): Promise<void>;
+  markRead(ids: string[]): Promise<void>;
 }
 
 /* ---------- change notifications: pages re-fetch after any write ---------- */

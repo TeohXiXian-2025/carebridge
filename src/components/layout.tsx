@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
@@ -6,6 +6,7 @@ import { resetDemo } from '../lib/localStore';
 import { enablePush, pushState, type PushState } from '../lib/pushClient';
 import type { Role } from '../lib/types';
 import { Avatar, Icon, Logo, Spinner, useToast } from './ui';
+import { NotificationBell } from './NotificationBell';
 
 export function DemoBanner() {
   if (api.mode !== 'local') return null;
@@ -20,23 +21,52 @@ export function DemoBanner() {
 function AccountMenu() {
   const { user } = useAuth();
   const nav = useNavigate();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [open]);
   if (!user)
     return (
       <Link to="/login" className="btn btn-sm">
         Log in
       </Link>
     );
-  const area = user.role === 'homeAdmin' ? '/admin' : user.role === 'platformAdmin' ? '/platform' : null;
+  const area = user.role === 'homeAdmin' ? { to: '/admin', label: 'My home dashboard' } : user.role === 'platformAdmin' ? { to: '/platform', label: 'Platform admin' } : null;
+  const roleLabel = user.role === 'donor' ? 'Donor' : user.role === 'homeAdmin' ? 'Welfare home manager' : 'Platform admin';
+  const go = (to: string) => {
+    setOpen(false);
+    nav(to);
+  };
   return (
-    <div className="row" style={{ gap: 14 }}>
-      {area && (
-        <Link to={area} className="btn btn-sm btn-ghost">
-          {user.role === 'homeAdmin' ? 'My home' : 'Admin'}
-        </Link>
-      )}
-      <button title="Log out" onClick={() => api.signOut().then(() => nav('/'))} className="row">
+    <div className="menu-wrap" ref={ref}>
+      <button className="avatar-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} title="Account">
         <Avatar name={user.fullName} />
+        <span className="caret" aria-hidden="true">▾</span>
       </button>
+      {open && (
+        <div className="menu" role="menu">
+          <div className="menu-head">
+            <b className="wrap-any">{user.fullName}</b>
+            <span className="small wrap-any">{user.email}</span>
+            <span className="tag t-teal" style={{ alignSelf: 'flex-start', marginTop: 4 }}>{roleLabel}</span>
+          </div>
+          {area && <button role="menuitem" onClick={() => go(area.to)}>{area.label}</button>}
+          <button role="menuitem" onClick={() => go('/my-pledges')}>My pledges</button>
+          <button role="menuitem" onClick={() => go(user.role === 'homeAdmin' ? '/admin/profile' : user.role === 'platformAdmin' ? '/platform/admins' : '/profile')}>Account &amp; notifications</button>
+          <button role="menuitem" className="danger" onClick={() => api.signOut().then(() => go('/'))}>Log out</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -62,6 +92,7 @@ export function DonorLayout({ children, title, noTabs, hideMobileHeader }: { chi
               Register a home
             </Link>
           )}
+          <NotificationBell />
           <AccountMenu />
         </div>
       </header>
@@ -69,9 +100,12 @@ export function DonorLayout({ children, title, noTabs, hideMobileHeader }: { chi
         <header className="mnav hide-d">
           {title ? <h2>{title}</h2> : <Link to="/"><Logo /></Link>}
           {user ? (
-            <Link to={user.role === 'homeAdmin' ? '/admin' : user.role === 'platformAdmin' ? '/platform' : '/profile'}>
-              <Avatar name={user.fullName} />
-            </Link>
+            <div className="hdr-actions">
+              <NotificationBell />
+              <Link to={user.role === 'homeAdmin' ? '/admin' : user.role === 'platformAdmin' ? '/platform' : '/profile'}>
+                <Avatar name={user.fullName} />
+              </Link>
+            </div>
           ) : (
             <Link to="/login" className="btn btn-sm">Log in</Link>
           )}
@@ -124,9 +158,12 @@ export function AdminLayout({ nav, subtitle, children }: { nav: NavItem[]; subti
       <DemoBanner />
       <div className="shell">
         <aside className="sidebar">
-          <div className="brand">
-            <Link to="/"><Logo size={22} /></Link>
-            <span className="small">{subtitle}</span>
+          <div className="brand brand-row">
+            <div className="stack" style={{ gap: 4, minWidth: 0 }}>
+              <Link to="/"><Logo size={22} /></Link>
+              <span className="small wrap-any">{subtitle}</span>
+            </div>
+            <NotificationBell />
           </div>
           {nav.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end} className="nav">
@@ -137,11 +174,12 @@ export function AdminLayout({ nav, subtitle, children }: { nav: NavItem[]; subti
           <div style={{ flex: 1 }} />
           <div className="row" style={{ gap: 10, padding: 8 }}>
             <Avatar name={user?.fullName} />
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{user?.fullName}</div>
-              <button className="small" onClick={out}>Log out</button>
+            <div className="grow" style={{ minWidth: 0 }}>
+              <div className="wrap-any" style={{ fontSize: 13, fontWeight: 600 }}>{user?.fullName}</div>
+              <div className="small wrap-any">{user?.email}</div>
             </div>
           </div>
+          <button className="btn btn-sm btn-muted" onClick={out}>Log out</button>
         </aside>
         <div className="grow">
           <header className="mnav hide-d">
@@ -149,7 +187,10 @@ export function AdminLayout({ nav, subtitle, children }: { nav: NavItem[]; subti
               <Link to="/"><Logo /></Link>
               <span className="small" style={{ fontSize: 11 }}>{subtitle}</span>
             </div>
-            <button onClick={out} title="Log out"><Avatar name={user?.fullName} /></button>
+            <div className="hdr-actions">
+              <NotificationBell />
+              <Link to={nav.find((n) => n.label === 'Profile' || n.label === 'Admins')?.to ?? '/profile'} title="Account"><Avatar name={user?.fullName} /></Link>
+            </div>
           </header>
           <main className="main content-m">{children}</main>
         </div>

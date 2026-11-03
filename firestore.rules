@@ -73,7 +73,10 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.adminId == uid() && request.resource.data.status == 'Pending';
       // Managers edit the profile; only platform admins approve or reject.
       allow update: if isPlatform()
-        || (managesHome(homeId) && !changed().hasAny(['status', 'adminId', 'reviewedAt', 'createdAt']));
+        || (managesHome(homeId) && !changed().hasAny(['status', 'adminId', 'reviewedAt', 'createdAt', 'reviewNote', 'resubmittedAt']))
+        // W11: a rejected home asks for review again.
+        || (managesHome(homeId) && resource.data.status == 'Rejected' && request.resource.data.status == 'Pending'
+            && changed().hasOnly(['status', 'reviewNote', 'resubmittedAt']));
     }
 
     match /items/{itemId} {
@@ -104,6 +107,31 @@ service cloud.firestore {
         || (managesHome(resource.data.homeId) && changed().hasOnly(['status', 'qtyReceived', 'receivedAt'])
             && ((resource.data.status == 'Pending' && request.resource.data.status in ['Accepted', 'Declined'])
                 || (resource.data.status == 'Accepted' && request.resource.data.status == 'Received')));
+    }
+
+    match /notifications/{id} {
+      function n() { return request.resource.data; }
+      function pledge(pid) { return get(/databases/$(database)/documents/pledges/$(pid)).data; }
+      function canSee(d) {
+        return signedIn() && (d.toUser == uid()
+          || (d.toHome != null && managesHome(d.toHome))
+          || (d.toRole == 'platformAdmin' && isPlatform()));
+      }
+      allow read: if canSee(resource.data);
+      // Only the person whose action caused it can send it, and only to the people involved.
+      allow create: if signedIn() && n().from == uid() && n().read == false
+        && n().keys().hasOnly(['toUser', 'toHome', 'toRole', 'title', 'body', 'path', 'pledgeId', 'homeId', 'from', 'createdAt', 'read'])
+        && (
+          // home → donor about that donor's pledge
+          (n().toUser != null && n().pledgeId != null && pledge(n().pledgeId).donorId == n().toUser && managesHome(pledge(n().pledgeId).homeId))
+          // donor → home about their own pledge
+          || (n().toHome != null && n().pledgeId != null && pledge(n().pledgeId).donorId == uid() && pledge(n().pledgeId).homeId == n().toHome)
+          // home → platform admins about their own home
+          || (n().toRole == 'platformAdmin' && n().homeId != null && managesHome(n().homeId))
+          // platform admin → a home
+          || (n().toHome != null && n().pledgeId == null && isPlatform())
+        );
+      allow update: if canSee(resource.data) && changed().hasOnly(['read']) && request.resource.data.read == true;
     }
   }
 }

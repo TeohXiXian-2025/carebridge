@@ -52,6 +52,17 @@ function emailHtml(lines: string[], link: string, button: string) {
 const fmtDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long' });
 
 export default async function handler(req: Req, res: Res) {
+  // GET = setup check, shows only whether each part is configured (never the secrets).
+  if (req.method === 'GET') {
+    let push = false;
+    try {
+      admin();
+      push = true;
+    } catch {
+      push = false;
+    }
+    return res.status(200).json({ pushConfigured: push, emailConfigured: Boolean(mailer), sender: process.env.SMTP_USER ? process.env.SMTP_USER.replace(/^(.{2}).*(@.*)$/, '$1***$2') : null });
+  }
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   let a: ReturnType<typeof admin>;
   try {
@@ -107,16 +118,19 @@ export default async function handler(req: Req, res: Res) {
     const snap = await a.db.doc(`homes/${ev.homeId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'Home not found' });
     const h = snap.data()!;
-    if (ev.type === 'home.registered' && caller === h.adminId && h.status === 'Pending') {
+    const managesIt = caller === h.adminId || (me.role === 'homeAdmin' && me.homeId === ev.homeId);
+    if (ev.type === 'home.registered' && managesIt && h.status === 'Pending') {
+      const again = Boolean(h.resubmittedAt);
       const admins = await a.db.collection('users').where('role', '==', 'platformAdmin').get();
-      notes.push({ to: admins.docs.map((d) => d.id), title: 'New home to review', body: `${h.name} (${h.area}) registered`, path: '/platform',
-        email: { subject: `New home to review: ${h.name}`, lines: [`${h.name} (${h.type}, ${h.area}) registered on CareBridge and is waiting for approval.`] } });
+      notes.push({ to: admins.docs.map((d) => d.id), title: again ? 'Home asks for review again' : 'New home to review', body: `${h.name} (${h.area}) ${again ? 'updated its details' : 'registered'}`, path: '/platform',
+        email: { subject: `${again ? 'Review again' : 'New home to review'}: ${h.name}`, lines: [`${h.name} (${h.type}, ${h.area}) ${again ? 'updated its details after being rejected and asks for review again' : 'registered on CareBridge and is waiting for approval'}.`] } });
     }
     if (ev.type === 'home.reviewed' && h.status !== 'Pending') {
       if (me.role === 'platformAdmin') {
         const ok = h.status === 'Approved';
-        notes.push({ to: await managers(ev.homeId), title: ok ? 'Your home is approved 🎉' : 'Registration not approved', body: ok ? `${h.name} is now visible to donors.` : `${h.name} was not approved.`, path: '/admin',
-          email: { subject: ok ? `${h.name} is approved on CareBridge` : 'CareBridge registration not approved', lines: ok ? [`Good news! ${h.name} is now visible to donors.`, 'Add or update your wishlist so donors know what you need.'] : [`${h.name} was not approved. Please contact the CareBridge team for details.`] } });
+        const why = h.reviewNote ? `Reason: ${h.reviewNote}` : 'Please contact the CareBridge team for details.';
+        notes.push({ to: await managers(ev.homeId), title: ok ? 'Your home is approved 🎉' : 'Registration not approved', body: ok ? `${h.name} is now visible to donors.` : `${h.name} was not approved. ${h.reviewNote ?? ''}`.trim(), path: '/admin',
+          email: { subject: ok ? `${h.name} is approved on CareBridge` : 'CareBridge registration not approved', lines: ok ? [`Good news! ${h.name} is now visible to donors.`, 'Add or update your wishlist so donors know what you need.'] : [`${h.name} was not approved.`, why, 'You can update your details and ask for review again from your CareBridge dashboard.'] } });
       }
     }
   }

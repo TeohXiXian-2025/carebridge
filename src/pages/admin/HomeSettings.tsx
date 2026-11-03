@@ -12,9 +12,9 @@ function Settings({ home }: { home: Home }) {
   const toast = useToast();
   return (
     <>
-      <PageHeader title="Home profile" sub="Donors see this on your public page." right={<Link to={`/homes/${home.id}`} className="link">View public page →</Link>} />
+      <PageHeader title="Home profile" sub="Donors see this on your public page." right={<Link to={`/homes/${home.id}`} className="link nowrap">Public page →</Link>} />
       <div style={{ maxWidth: 640 }}><ManagersPanel home={home} /></div>
-      <div style={{ maxWidth: 640 }}><AccountSettings /></div>
+      <div style={{ maxWidth: 640 }}><AccountSettings logout /></div>
       <h3>Home details</h3>
       <div className="card" style={{ maxWidth: 640, padding: 20 }}>
         <HomeForm

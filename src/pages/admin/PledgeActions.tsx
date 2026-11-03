@@ -47,7 +47,7 @@ export function PledgeCard({ p, onReceive }: { p: Pledge; onReceive: (p: Pledge)
 /** Desktop pledge table. */
 export function PledgeTable({ list, onReceive, showStatus = true }: { list: Pledge[]; onReceive: (p: Pledge) => void; showStatus?: boolean }) {
   return (
-    <table className="table">
+    <div className="table-wrap"><table className="table">
       <thead><tr><th>Pledge no.</th><th>Donor</th><th>Item</th><th>Qty</th><th>Drop-off</th>{showStatus && <th>Status</th>}<th>Actions</th></tr></thead>
       <tbody>
         {list.map((p) => (
@@ -62,7 +62,7 @@ export function PledgeTable({ list, onReceive, showStatus = true }: { list: Pled
           </tr>
         ))}
       </tbody>
-    </table>
+    </table></div>
   );
 }
 

@@ -3,14 +3,14 @@ import {
   sendEmailVerification, signOut as fbSignOut, type User,
 } from 'firebase/auth';
 import {
-  arrayUnion, collection, deleteDoc, doc, getCountFromServer, getDoc, getDocs, getFirestore, query, runTransaction, setDoc, updateDoc, where, writeBatch,
-  type DocumentData, type QueryConstraint,
+  addDoc, arrayUnion, collection, deleteDoc, doc, onSnapshot, queryEqual, refEqual, getCountFromServer, getDoc, getDocs, getFirestore, query, runTransaction, setDoc, updateDoc, where, writeBatch,
+  type DocumentData, type DocumentReference, type Query, type QueryConstraint,
 } from 'firebase/firestore';
 import { firebaseApp } from './firebase';
 import { applyPledge, applyReceived, applyRelease, bump, UserError, type Store } from './store';
 import { calcStatus, canPledge, makePledgeNo, stillNeeded } from './logic';
 import { isPlatformAdminEmail } from './admins';
-import type { Home, Invite, Pledge, UserProfile, WishlistItem } from './types';
+import type { AppNotification, Home, Invite, Pledge, UserProfile, WishlistItem } from './types';
 
 const AUTH_ERRORS: Record<string, string> = {
   'auth/invalid-credential': 'Wrong email or password.',
@@ -36,10 +36,48 @@ export function createFirebaseStore(): Store {
   const db = getFirestore(app);
   const col = (name: string) => collection(db, name);
   const withId = <T,>(d: { id: string; data(): DocumentData | undefined }) => ({ id: d.id, ...(d.data() as object) }) as T;
-  const list = async <T,>(name: string, ...c: QueryConstraint[]) => (await getDocs(query(col(name), ...c))).docs.map((d) => withId<T>(d));
+  /* ---------- real time: every query a page reads keeps listening; any change anywhere refreshes the page ---------- */
+  type Watch = { q: Query | DocumentReference; unsub: () => void };
+  let watchers: Watch[] = [];
+  let timer = 0;
+  const refreshSoon = () => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(bump, 150);
+  };
+  const same = (a: Query | DocumentReference, b: Query | DocumentReference) =>
+    a.type === 'document' || b.type === 'document' ? a.type === b.type && refEqual(a as DocumentReference, b as DocumentReference) : queryEqual(a as Query, b as Query);
+  function watch(q: Query | DocumentReference) {
+    if (watchers.some((w) => same(w.q, q))) return;
+    let first = true;
+    const entry: Watch = { q, unsub: () => {} };
+    const next = () => {
+      if (first) first = false;
+      else refreshSoon();
+    };
+    const fail = () => {
+      entry.unsub();
+      watchers = watchers.filter((w) => w !== entry);
+    };
+    entry.unsub = q.type === 'document' ? onSnapshot(q as DocumentReference, next, fail) : onSnapshot(q as Query, next, fail);
+    watchers.push(entry);
+    if (watchers.length > 40) watchers.shift()!.unsub();
+  }
+  const stopWatching = () => {
+    watchers.forEach((w) => w.unsub());
+    watchers = [];
+  };
+
+  const list = async <T,>(name: string, ...c: QueryConstraint[]) => {
+    const q = query(col(name), ...c);
+    const docs = (await getDocs(q)).docs.map((d) => withId<T>(d));
+    watch(q);
+    return docs;
+  };
   const one = async <T,>(name: string, id: string) => {
     try {
-      const s = await getDoc(doc(db, name, id));
+      const ref = doc(db, name, id);
+      const s = await getDoc(ref);
+      watch(ref);
       return s.exists() ? withId<T>(s) : null;
     } catch {
       return null; // not allowed by security rules → treat as not found
@@ -90,10 +128,19 @@ export function createFirebaseStore(): Store {
   return {
     mode: 'firebase',
     onAuth(cb) {
-      return onAuthStateChanged(auth, async (fu) => {
+      let stopProfile = () => {};
+      const stopAuth = onAuthStateChanged(auth, async (fu) => {
+        stopProfile();
+        stopWatching();
         if (!fu) return cb(null);
         cb(await ensureProfile(fu));
+        // Role or details changed elsewhere (invite accepted, removed as manager, made admin) → update straight away.
+        stopProfile = onSnapshot(doc(db, 'users', fu.uid), (s) => s.exists() && cb(withId<UserProfile>(s)), () => {});
       });
+      return () => {
+        stopProfile();
+        stopAuth();
+      };
     },
     async signUp(email, password, fullName, phone) {
       try {
@@ -177,14 +224,16 @@ export function createFirebaseStore(): Store {
           await b.commit();
         }
       }),
-    reviewHome: (id, approve) =>
+    setHomeStatus: (id, status, note) =>
       write(async () => {
         const items = await list<WishlistItem>('items', where('homeId', '==', id));
         const b = writeBatch(db);
-        b.update(doc(db, 'homes', id), { status: approve ? 'Approved' : 'Rejected', reviewedAt: Date.now() });
-        items.forEach((i) => b.update(doc(db, 'items', i.id), { homeApproved: approve }));
+        const approved = status === 'Approved';
+        b.update(doc(db, 'homes', id), { status, reviewedAt: status === 'Pending' ? null : Date.now(), reviewNote: status === 'Rejected' ? note?.trim() || null : null });
+        items.forEach((i) => i.homeApproved !== approved && b.update(doc(db, 'items', i.id), { homeApproved: approved }));
         await b.commit();
       }),
+    resubmitHome: (id) => write(() => updateDoc(doc(db, 'homes', id), { status: 'Pending', reviewNote: null, resubmittedAt: Date.now() })),
     addItem: (user, home, data) =>
       write(async () => {
         const base = { qtyNeeded: data.qtyNeeded, qtyPledged: 0, qtyReceived: 0, status: 'Open' as const };
@@ -292,5 +341,36 @@ export function createFirebaseStore(): Store {
       }),
     cancelInvite: (email) => write(() => deleteDoc(doc(db, 'invites', email))),
     demote: (uid) => write(() => updateDoc(doc(db, 'users', uid), { role: 'donor', homeId: null })),
+
+    watchNotifications(user, cb) {
+      const qs = [query(col('notifications'), where('toUser', '==', user.id))];
+      if (user.role === 'homeAdmin' && user.homeId) qs.push(query(col('notifications'), where('toHome', '==', user.homeId)));
+      if (user.role === 'platformAdmin') qs.push(query(col('notifications'), where('toRole', '==', 'platformAdmin')));
+      const parts: AppNotification[][] = qs.map(() => []);
+      const emit = () => cb(parts.flat().sort((a, b) => b.createdAt - a.createdAt).slice(0, 50));
+      const unsubs = qs.map((q, k) =>
+        onSnapshot(
+          q,
+          (snap) => {
+            parts[k] = snap.docs.map((d) => withId<AppNotification>(d));
+            emit();
+          },
+          () => {},
+        ),
+      );
+      return () => unsubs.forEach((u) => u());
+    },
+    async addNotification(by, n) {
+      try {
+        await addDoc(col('notifications'), { ...n, from: by.id, createdAt: Date.now(), read: false });
+      } catch (e) {
+        console.warn('In-app notification not saved:', e);
+      }
+    },
+    async markRead(ids) {
+      const b = writeBatch(db);
+      ids.forEach((id) => b.update(doc(db, 'notifications', id), { read: true }));
+      await b.commit().catch(() => {});
+    },
   };
 }

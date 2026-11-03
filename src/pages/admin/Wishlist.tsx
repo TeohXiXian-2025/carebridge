@@ -87,10 +87,8 @@ function NeedForm({ home, item, onClose }: { home: Home; item?: WishlistItem; on
 
 const FILTERS: { key: string; label: string; test: (s: ItemStatus) => boolean }[] = [
   { key: 'all', label: 'All', test: () => true },
-  { key: 'open', label: 'Open', test: (s) => s === 'Open' },
-  { key: 'part', label: 'Partially pledged', test: (s) => s === 'Partially pledged' },
-  { key: 'full', label: 'Fully pledged', test: (s) => s === 'Fully pledged' },
-  { key: 'done', label: 'Fulfilled', test: (s) => s === 'Fulfilled' },
+  { key: 'unfulfilled', label: 'Unfulfilled', test: (s) => s === 'Open' || s === 'Partially pledged' || s === 'Fully pledged' },
+  { key: 'fulfilled', label: 'Fulfilled', test: (s) => s === 'Fulfilled' },
   { key: 'paused', label: 'Paused', test: (s) => s === 'Paused' },
 ];
 
@@ -125,15 +123,14 @@ function Wishlist({ home }: { home: Home }) {
       <div className="chips">
         {FILTERS.map((x) => {
           const n = all.filter((i) => x.test(i.status)).length;
-          if (x.key !== 'all' && !n) return null;
           return <button key={x.key} className={`chip${f === x.key ? ' on' : ''}`} onClick={() => setF(x.key)}>{x.label} ({n})</button>;
         })}
       </div>
       {!desktop && list.length > 0 && <p className="small">Numbers show needed / pledged / received.</p>}
       {data && list.length === 0 && <div className="card empty">{all.length ? 'Nothing with this status.' : 'No needs yet. Add the first item your home needs.'}</div>}
       {list.length > 0 && desktop && (
-        <table className="table">
-          <thead><tr><th>Item</th><th>Priority</th><th>Needed by</th><th>Need / Pledged / Rec.</th><th>Status</th><th>Actions</th></tr></thead>
+        <div className="table-wrap"><table className="table">
+          <thead><tr><th>Item</th><th>Priority</th><th>Needed by</th><th>Needed / Pledged / Received</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             {list.map((i) => (
               <tr key={i.id}>
@@ -146,7 +143,7 @@ function Wishlist({ home }: { home: Home }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
       {!desktop &&
         list.map((i) => (

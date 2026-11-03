@@ -108,7 +108,7 @@ export default function MyPledges() {
         {seg}
         <PushPrompt text="Get notified when homes accept or receive your pledges." />
         {list.length === 0 ? empty : (
-          <table className="table">
+          <div className="table-wrap"><table className="table">
             <thead><tr><th>Pledge no.</th><th>Item</th><th>Home</th><th>Drop-off</th><th>Progress</th><th>Actions</th></tr></thead>
             <tbody>
               {list.map((p) => (
@@ -122,7 +122,7 @@ export default function MyPledges() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         <div className="card row" style={{ gap: 24, padding: 20, alignItems: 'flex-start', borderRadius: 16 }}>
           {[

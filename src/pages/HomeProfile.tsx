@@ -45,7 +45,10 @@ export default function HomeProfile() {
     );
 
   const f = fulfilment(items);
-  const shown = items.filter((i) => i.status !== 'Paused' && (!cat || i.category === cat));
+  // Donors only see what is still useful: no paused or already-fulfilled needs.
+  const shown = items.filter((i) => i.status !== 'Paused' && i.status !== 'Fulfilled' && (!cat || i.category === cat));
+  const doneCount = items.filter((i) => i.status === 'Fulfilled').length;
+  const doneNote = doneCount > 0 && <p className="small">{doneCount} need{doneCount === 1 ? ' is' : 's are'} already fulfilled. Thank you, donors!</p>;
   const cover = (
     <div style={{ position: 'relative' }}>
       <HomePhoto home={home} w="100%" h={desktop ? 200 : 150} radius={0} font={28} />
@@ -70,8 +73,9 @@ export default function HomeProfile() {
             <p className="small"><b style={{ color: 'var(--ink)' }}>Drop-off:</b> {home.dropoffHours} · {home.address}</p>
           </div>
           <div className="between"><h3>Wishlist ({shown.length})</h3><span className="small">Sorted by priority</span></div>
-          {shown.length === 0 && <div className="card empty">No needs listed right now.</div>}
+          {shown.length === 0 && <div className="card empty">No open needs right now.</div>}
           {shown.map((i) => <ItemCard key={i.id} item={i} onPledge={openPledge} />)}
+          {doneNote}
         </div>
         {sheet}
       </DonorLayout>
@@ -110,6 +114,7 @@ export default function HomeProfile() {
             </div>
             {shown.length === 0 && <div className="card empty">No needs in this category right now.</div>}
             {shown.map((i) => <ItemRow key={i.id} item={i} onPledge={openPledge} />)}
+            {doneNote}
           </section>
         </div>
       </div>

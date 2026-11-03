@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { AdminLayout, HOME_ADMIN_NAV, RequireRole } from '../../components/layout';
-import { Spinner } from '../../components/ui';
+import { Spinner, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import type { Home } from '../../lib/types';
@@ -22,11 +23,36 @@ function Inner({ children }: { children: (home: Home) => ReactNode }) {
       {home === undefined ? <Spinner /> : home === null ? <div className="card empty">Home not found.</div> : (
         <>
           {home.status === 'Pending' && <div className="note"><b>Waiting for approval.</b> Donors can't see your home yet. Add your wishlist now so it's ready.</div>}
-          {home.status === 'Rejected' && <div className="error">Your registration was not approved. Please contact the CareBridge team.</div>}
+          {home.status === 'Rejected' && <RejectedNote home={home} />}
           {children(home)}
         </>
       )}
     </AdminLayout>
+  );
+}
+
+function RejectedNote({ home }: { home: Home }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const again = async () => {
+    setBusy(true);
+    try {
+      await api.resubmitHome(home.id);
+      toast('Sent for review again');
+    } catch (e) {
+      toast((e as Error).message);
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="error stack" style={{ gap: 8 }}>
+      <span>Your registration was not approved.{home.reviewNote ? ` Reason: ${home.reviewNote}` : ''}</span>
+      <span style={{ fontWeight: 500 }}>Update your details under Profile, then ask the CareBridge team to review it again.</span>
+      <div className="row wrap" style={{ gap: 8 }}>
+        <Link to="/admin/profile" className="btn btn-sm btn-plain">Edit home details</Link>
+        <button className="btn btn-sm" disabled={busy} onClick={again}>Ask for review again</button>
+      </div>
+    </div>
   );
 }
 

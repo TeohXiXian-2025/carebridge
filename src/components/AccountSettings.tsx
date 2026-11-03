@@ -5,7 +5,7 @@ import { PushPrompt } from './layout';
 import { Field, useToast } from './ui';
 
 /** Name, phone and notification settings – shown to every role. */
-export function AccountSettings() {
+export function AccountSettings({ logout = false }: { logout?: boolean }) {
   const { user, refresh } = useAuth();
   const toast = useToast();
   const [name, setName] = useState(user?.fullName ?? '');
@@ -50,6 +50,11 @@ export function AccountSettings() {
         <button className={`toggle${emailOn ? ' on' : ''}`} aria-pressed={emailOn} aria-label="Email notifications" onClick={toggleEmail} />
       </div>
       <PushPrompt text="App notifications on this device are off." />
+      {logout && (
+        <button className="btn btn-muted btn-block hide-d" onClick={() => api.signOut()}>
+          Log out
+        </button>
+      )}
     </div>
   );
 }

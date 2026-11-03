@@ -183,7 +183,9 @@ textarea.input { height: auto; min-height: 90px; padding: 12px 14px; resize: ver
 .stat .v { font-size: 24px; font-weight: 800; }
 .stat .l { font-size: 11px; font-weight: 600; color: var(--mute); }
 @media (min-width: 900px) { .stats { gap: 16px; } .stat { border-radius: 16px; padding: 18px; gap: 6px; } .stat .v { font-size: 30px; } .stat .l { font-size: 13px; } }
-.table { background: #fff; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; width: 100%; border-collapse: separate; border-spacing: 0; }
+.table-wrap { width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+.table { background: #fff; width: 100%; border-collapse: separate; border-spacing: 0; }
+.table th { white-space: nowrap; }
 .table th { background: #f3f5f4; text-align: left; font-size: 12px; font-weight: 700; color: var(--mute); padding: 10px 16px; }
 .table td { padding: 12px 16px; border-top: 1px solid var(--line); font-size: 13px; vertical-align: middle; }
 .empty { text-align: center; padding: 28px 16px; color: var(--mute); font-size: 13px; }
@@ -194,10 +196,13 @@ textarea.input { height: auto; min-height: 90px; padding: 12px 14px; resize: ver
 /* Login split */
 .auth-split { min-height: 100vh; display: flex; }
 .brand-panel { display: none; }
+/* The form always takes the full width on phones and a fixed 420 px column on desktop. */
+.auth-form { flex: 1; min-width: 0; }
+.auth-form > form { width: 100%; }
 @media (min-width: 900px) {
   .brand-panel { display: flex; width: 560px; background: var(--teal); padding: 64px; flex-direction: column; justify-content: space-between; color: #fff; flex-shrink: 0; }
-  .auth-form { flex: 1; display: flex; align-items: center; justify-content: center; }
-  .auth-form > div { width: 420px; }
+  .auth-form { display: flex; align-items: center; justify-content: center; }
+  .auth-form > form { width: 420px; max-width: 100%; }
 }
 
 /* Toast */
@@ -219,3 +224,39 @@ textarea.input { height: auto; min-height: 90px; padding: 12px 14px; resize: ver
 @media (min-width: 900px) { .pledge-pair { flex-direction: row; } .pledge-pair > * { flex: 1; } .pledge-actions { justify-content: flex-end; } .pledge-confirm { flex: 0 0 auto; } }
 
 @media (max-width: 899px) { .container { padding: 0 20px 24px; gap: 14px; } }
+
+/* Long emails, names and words never spill over other text */
+.wrap-any { overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
+h1, h2, h3, p, b, td, .small, .sub { overflow-wrap: anywhere; }
+
+/* Account menu (desktop) */
+.menu-wrap { position: relative; }
+.avatar-btn { display: flex; align-items: center; gap: 4px; padding: 2px; border-radius: 22px; }
+.avatar-btn:hover .avatar { box-shadow: 0 0 0 3px var(--teal-l); }
+.caret { font-size: 11px; color: var(--mute); }
+.menu { position: absolute; right: 0; top: calc(100% + 8px); width: 260px; background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 12px 32px rgba(20,30,32,.14); padding: 6px; z-index: 60; display: flex; flex-direction: column; animation: fade .12s; }
+.menu-head { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 12px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.menu button { text-align: left; padding: 10px 12px; border-radius: 9px; font-size: 14px; font-weight: 500; }
+.menu button:hover { background: var(--bg); }
+.menu button.danger { color: var(--red); }
+
+/* Notification bell */
+.bell { position: relative; width: 38px; height: 38px; border-radius: 19px; display: flex; align-items: center; justify-content: center; color: var(--ink); background: #fff; border: 1px solid var(--line); flex-shrink: 0; }
+.bell:hover { background: var(--bg); }
+.badge { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--red); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; }
+.notif-menu { width: 340px; max-width: calc(100vw - 24px); }
+.notif-list { max-height: min(420px, 60vh); overflow-y: auto; display: flex; flex-direction: column; }
+.notif { display: flex !important; gap: 10px; align-items: flex-start; text-align: left; padding: 10px 12px !important; }
+.notif .dot { width: 8px; height: 8px; border-radius: 4px; background: transparent; margin-top: 6px; flex-shrink: 0; }
+.notif.unread { background: var(--teal-l); }
+.notif.unread .dot { background: var(--teal); }
+.notif.unread:hover { background: #d6ece7; }
+.hdr-actions { display: flex; align-items: center; gap: 10px; }
+@media (max-width: 899px) { .notif-menu { position: fixed; left: 12px; right: 12px; top: 64px; width: auto; } }
+.sidebar .brand-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.sidebar .notif-menu { left: 0; right: auto; }
+
+.sidebar .brand.brand-row { flex-direction: row; padding-right: 0; }
+.nowrap { white-space: nowrap; }
+/* Toasts at the top on phones, so they never cover a form's buttons or the tab bar */
+@media (max-width: 899px) { .toast { bottom: auto; top: calc(12px + env(safe-area-inset-top)); } }

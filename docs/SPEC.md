@@ -58,6 +58,8 @@ Items and pledges copy the names they display (homeName, itemName). Pages never 
 
 Where qtyPledged counts quantities from pledges that are Pending, Accepted or Received.
 
+**Donor wishlist**: shows only Open, Partially pledged and Fully pledged items (Fulfilled and Paused are hidden; a line says how many are already fulfilled). Home managers filter All / Unfulfilled / Fulfilled / Paused.
+
 **Pledge button**: enabled only when status is Open or Partially pledged. Otherwise grey ("Pledged" / "Fulfilled" / "Paused").
 
 **Still needed** = qtyNeeded − qtyPledged. The pledge quantity must be 1 … still needed.
@@ -81,7 +83,8 @@ Where qtyPledged counts quantities from pledges that are Pending, Accepted or Re
 | W7 | Home admin pauses / resumes | Paused → status Paused; Resume → recalc |
 | W8 | User registers a home | Create Home (Pending, adminId = user) → user.role = homeAdmin, user.homeId = home |
 | W9 | Platform admin approves | Home → Approved, reviewedAt = now → set homeApproved = yes on all its items |
-| W10 | Platform admin rejects | Home → Rejected, reviewedAt = now |
+| W10 | Platform admin rejects | Home → Rejected, reviewedAt = now, optional reason (reviewNote) shown to the home |
+| W11 | Rejected home asks again | Manager edits details → "Ask for review again" → Home → Pending; platform admins notified. Platform admins can also change any home's status at any time (Approve / Reject / Back to pending). |
 
 ## 6. Privacy rules
 
@@ -142,7 +145,7 @@ Breakpoint: below 900 px use the mobile layouts (bottom tab bar), from 900 px th
 | W3 | Donor | Pledge declined |
 | W5 | Donor | Thank you – your donation was received |
 
-Every event is sent two ways: an **app notification** (push, on devices where the user turned it on) and an **email** (unless the user switched emails off in My account).
+Every event is sent three ways: an **in-app notification** (the bell, live, stored in Firestore `notifications`), an **app notification** (push, on devices where the user turned it on) and an **email** (unless the user switched emails off in My account).
 Bubble: built-in "Send email" (push needs a paid plugin, so Bubble sends email only). Code: the Vercel function `api/notify.ts` sends both (Firebase Cloud Messaging + SMTP mailbox), because Firebase Spark has no server functions.
 
 | Event | App notification to |

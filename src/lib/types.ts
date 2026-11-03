@@ -42,6 +42,9 @@ export interface Home {
   notifyEmail?: string;
   createdAt: number;
   reviewedAt?: number | null;
+  /** Reason given by the platform admin when rejecting. */
+  reviewNote?: string | null;
+  resubmittedAt?: number | null;
 }
 
 export interface WishlistItem {
@@ -97,3 +100,20 @@ export interface Invite {
   invitedByName: string;
   createdAt: number;
 }
+
+/** In-app notification (the bell). Sent to one user, to all managers of a home, or to all platform admins. */
+export interface AppNotification {
+  id: string;
+  toUser: string | null;
+  toHome: string | null;
+  toRole: 'platformAdmin' | null;
+  title: string;
+  body: string;
+  path: string;
+  pledgeId: string | null;
+  homeId: string | null;
+  from: string;
+  createdAt: number;
+  read: boolean;
+}
+export type NewNotification = Omit<AppNotification, 'id' | 'from' | 'createdAt' | 'read'>;

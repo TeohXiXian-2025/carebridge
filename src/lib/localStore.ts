@@ -1,5 +1,5 @@
-import type { Home, Invite, Pledge, UserProfile, WishlistItem } from './types';
-import { applyPledge, applyReceived, applyRelease, bump, UserError, type Store } from './store';
+import type { AppNotification, Home, Invite, Pledge, UserProfile, WishlistItem } from './types';
+import { applyPledge, applyReceived, applyRelease, bump, subscribe, UserError, type Store } from './store';
 import { calcStatus, canPledge, makePledgeNo, stillNeeded } from './logic';
 import { DEMO_PASSWORD, DEMO_USERS, seedHomes, seedItems, seedPledges } from './seed';
 
@@ -8,7 +8,7 @@ import { DEMO_PASSWORD, DEMO_USERS, seedHomes, seedItems, seedPledges } from './
  * Used when no Firebase config is set, so the app can be clicked through and tested offline.
  */
 const KEY = 'carebridge-demo-v1';
-type DB = { users: (UserProfile & { password: string })[]; homes: Home[]; items: WishlistItem[]; pledges: Pledge[]; invites?: Invite[]; session: string | null };
+type DB = { users: (UserProfile & { password: string })[]; homes: Home[]; items: WishlistItem[]; pledges: Pledge[]; invites?: Invite[]; notifications?: AppNotification[]; session: string | null };
 
 function fresh(): DB {
   const homes = seedHomes();
@@ -44,6 +44,11 @@ export function resetDemo() {
 
 export function createLocalStore(): Store {
   let db = load();
+  window.addEventListener('storage', (e) => {
+    if (e.key !== KEY) return;
+    db = load();
+    bump();
+  });
   const authListeners = new Set<(u: UserProfile | null) => void>();
   const me = () => {
     const u = db.users.find((x) => x.id === db.session);
@@ -175,12 +180,20 @@ export function createLocalStore(): Store {
       db.items.filter((i) => i.homeId === id).forEach((i) => Object.assign(i, { homeName: h.name, homeArea: h.area }));
       commit();
     },
-    async reviewHome(id, approve) {
+    async setHomeStatus(id, status, note) {
       await tick();
       const h = db.homes.find((x) => x.id === id)!;
-      h.status = approve ? 'Approved' : 'Rejected';
-      h.reviewedAt = Date.now();
-      db.items.filter((i) => i.homeId === id).forEach((i) => (i.homeApproved = approve));
+      h.status = status;
+      h.reviewedAt = status === 'Pending' ? null : Date.now();
+      h.reviewNote = status === 'Rejected' ? note?.trim() || null : null;
+      db.items.filter((i) => i.homeId === id).forEach((i) => (i.homeApproved = status === 'Approved'));
+      commit();
+    },
+    async resubmitHome(id) {
+      await tick();
+      const h = db.homes.find((x) => x.id === id)!;
+      if (h.status !== 'Rejected') throw new UserError('Only a rejected home can ask for review again.');
+      Object.assign(h, { status: 'Pending', reviewNote: null, resubmittedAt: Date.now() });
       commit();
     },
     async addItem(user, home, data) {
@@ -271,6 +284,30 @@ export function createLocalStore(): Store {
       if (u) Object.assign(u, { role: 'donor', homeId: null });
       commit();
       if (id === db.session) emitAuth();
+    },
+
+    watchNotifications(user, cb) {
+      const emit = () => {
+        db = load();
+        cb((db.notifications ?? []).filter((n) => n.toUser === user.id || (user.role === 'homeAdmin' && n.toHome === user.homeId) || (user.role === 'platformAdmin' && n.toRole === 'platformAdmin')).sort((a, b) => b.createdAt - a.createdAt).slice(0, 50));
+      };
+      emit();
+      // Demo mode: other tabs of the same browser count as "other people".
+      const onStorage = (e: StorageEvent) => e.key === KEY && emit();
+      window.addEventListener('storage', onStorage);
+      const off = subscribe(emit);
+      return () => {
+        off();
+        window.removeEventListener('storage', onStorage);
+      };
+    },
+    async addNotification(by, n) {
+      db.notifications = [...(db.notifications ?? []), { ...n, id: uid('n'), from: by.id, createdAt: Date.now(), read: false }];
+      commit();
+    },
+    async markRead(ids) {
+      (db.notifications ?? []).forEach((n) => ids.includes(n.id) && (n.read = true));
+      commit();
     },
   };
 }
