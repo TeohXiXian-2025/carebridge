@@ -1,20 +1,27 @@
 /**
- * Vercel serverless function: sends push notifications through Firebase Cloud Messaging.
- * Replaces Cloud Functions (not available on Firebase's free Spark plan).
+ * Vercel serverless function: sends CareBridge notifications as
+ *   1. app (push) notifications through Firebase Cloud Messaging, and
+ *   2. emails through any SMTP mailbox (e.g. a Gmail account with an App Password).
+ * Replaces Cloud Functions, which Firebase's free Spark plan doesn't include.
  *
- * Needs one Vercel environment variable, set by the project owner in Vercel → Settings:
- *   FIREBASE_SERVICE_ACCOUNT = the full JSON of a Firebase service account key
+ * Vercel environment variables (Settings → Environment Variables), all server-only secrets:
+ *   FIREBASE_SERVICE_ACCOUNT  full JSON of a Firebase service account key   (needed for both)
+ *   SMTP_USER                 mailbox that sends the emails, e.g. carebridge.noreply@gmail.com
+ *   SMTP_PASS                 its App Password (Google Account → Security → App passwords)
+ *   SMTP_HOST / SMTP_PORT     optional, default smtp.gmail.com / 465
  *
- * The caller must be signed in. The function only notifies the people involved in the
- * pledge or home named in the request, so it cannot be used to spam other users.
+ * The caller must be signed in, and only the people involved in the named pledge or home are
+ * notified, so the endpoint can't be used to message anyone else.
  */
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
+import nodemailer from 'nodemailer';
 
 type Req = { method?: string; headers: Record<string, string | string[] | undefined>; body?: unknown };
 type Res = { status(code: number): Res; json(body: unknown): void };
+type Note = { to: string[]; title: string; body: string; path: string; email?: { subject: string; lines: string[] } };
 
 function admin() {
   if (!getApps().length) {
@@ -25,7 +32,24 @@ function admin() {
   return { auth: getAuth(), db: getFirestore(), messaging: getMessaging() };
 }
 
-type Msg = { to: string[]; title: string; body: string; url: string };
+const mailer = process.env.SMTP_USER && process.env.SMTP_PASS
+  ? nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: Number(process.env.SMTP_PORT || 465),
+      secure: Number(process.env.SMTP_PORT || 465) === 465,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    })
+  : null;
+
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+function emailHtml(lines: string[], link: string, button: string) {
+  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#1F2A2E">
+  <div style="font-size:22px;font-weight:800;color:#0E7C6B;margin:16px 0">Care<span style="color:#E8833A">Bridge</span></div>
+  ${lines.map((l) => `<p style="font-size:15px;line-height:1.5;margin:0 0 12px">${esc(l)}</p>`).join('')}
+  <p style="margin:20px 0"><a href="${link}" style="background:#0E7C6B;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">${esc(button)}</a></p>
+  <p style="font-size:12px;color:#6B7780">Give what is needed, not what is guessed.</p></div>`;
+}
+const fmtDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long' });
 
 export default async function handler(req: Req, res: Res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -36,66 +60,85 @@ export default async function handler(req: Req, res: Res) {
     return res.status(503).json({ error: (e as Error).message });
   }
   const header = String(req.headers.authorization ?? '');
-  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
   let caller: string;
   try {
-    caller = (await a.auth.verifyIdToken(token)).uid;
+    caller = (await a.auth.verifyIdToken(header.replace(/^Bearer /, ''))).uid;
   } catch {
     return res.status(401).json({ error: 'Not signed in' });
   }
-
+  const host = String(req.headers['x-forwarded-host'] ?? req.headers.host ?? '');
+  const appUrl = process.env.APP_URL || `https://${host}`;
   const ev = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as { type: string; pledgeId?: string; homeId?: string };
-  const msgs: Msg[] = [];
+  const notes: Note[] = [];
 
   if (ev.pledgeId) {
     const snap = await a.db.doc(`pledges/${ev.pledgeId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'Pledge not found' });
     const p = snap.data()!;
-    const involved = caller === p.donorId || caller === p.homeAdminId;
-    if (!involved) return res.status(403).json({ error: 'Not your pledge' });
+    if (caller !== p.donorId && caller !== p.homeAdminId) return res.status(403).json({ error: 'Not your pledge' });
+    const home = (await a.db.doc(`homes/${p.homeId}`).get()).data() ?? {};
     const what = `${p.itemName} × ${p.quantity}`;
-    if (ev.type === 'pledge.created' && p.status === 'Pending')
-      msgs.push({ to: [p.homeAdminId], title: 'New pledge', body: `${p.contactName} pledged ${what}`, url: '/admin/pledges' });
+    const where = `${home.address ?? ''} (${home.dropoffHours ?? ''})`;
+    if (ev.type === 'pledge.created' && p.status === 'Pending') {
+      notes.push({ to: [p.homeAdminId], title: 'New pledge', body: `${p.contactName} pledged ${what}`, path: '/admin/pledges',
+        email: { subject: `New pledge: ${what}`, lines: [`${p.contactName} (${p.contactPhone}) pledged ${what} to ${p.homeName}.`, `Planned drop-off: ${fmtDate(p.dropoffDate)}. Pledge no. ${p.pledgeNo}.`, 'Open CareBridge to accept or decline it.'] } });
+      notes.push({ to: [p.donorId], title: 'Pledge sent', body: `${p.homeName} will review your pledge of ${what}.`, path: '/my-pledges',
+        email: { subject: `Your CareBridge pledge ${p.pledgeNo}`, lines: [`Thank you! You pledged ${what} to ${p.homeName}.`, `Planned drop-off: ${fmtDate(p.dropoffDate)} at ${where}.`, 'Status: Pending. We will let you know when the home accepts it.'] } });
+    }
     if (ev.type === 'pledge.cancelled' && p.status === 'Cancelled')
-      msgs.push({ to: [p.homeAdminId], title: 'Pledge cancelled', body: `${p.contactName} cancelled ${what}`, url: '/admin/pledges' });
+      notes.push({ to: [p.homeAdminId], title: 'Pledge cancelled', body: `${p.contactName} cancelled ${what}`, path: '/admin/pledges',
+        email: { subject: `Pledge cancelled: ${what}`, lines: [`${p.contactName} cancelled pledge ${p.pledgeNo} (${what}). The quantity is open for other donors again.`] } });
     if (ev.type === 'pledge.accepted' && p.status === 'Accepted')
-      msgs.push({ to: [p.donorId], title: 'Pledge accepted', body: `${p.homeName} accepted ${what}. See you at drop-off!`, url: '/my-pledges' });
+      notes.push({ to: [p.donorId], title: 'Pledge accepted', body: `${p.homeName} accepted ${what}. See you at drop-off!`, path: '/my-pledges',
+        email: { subject: 'Pledge accepted – drop-off details', lines: [`${p.homeName} accepted your pledge ${p.pledgeNo} (${what}).`, `Please drop it off on ${fmtDate(p.dropoffDate)} at ${where}.`] } });
     if (ev.type === 'pledge.declined' && p.status === 'Declined')
-      msgs.push({ to: [p.donorId], title: 'Pledge declined', body: `${p.homeName} could not accept ${what}.`, url: '/my-pledges' });
+      notes.push({ to: [p.donorId], title: 'Pledge declined', body: `${p.homeName} could not accept ${what}.`, path: '/my-pledges',
+        email: { subject: 'Pledge declined', lines: [`${p.homeName} could not accept pledge ${p.pledgeNo} (${what}).`, 'Please check their wishlist or other homes for current needs.'] } });
     if (ev.type === 'pledge.received' && p.status === 'Received')
-      msgs.push({ to: [p.donorId], title: 'Donation received – thank you!', body: `${p.homeName} received ${p.itemName} × ${p.qtyReceived}.`, url: '/my-pledges' });
+      notes.push({ to: [p.donorId], title: 'Donation received – thank you!', body: `${p.homeName} received ${p.itemName} × ${p.qtyReceived}.`, path: '/my-pledges',
+        email: { subject: 'Thank you – your donation was received', lines: [`${p.homeName} received ${p.itemName} × ${p.qtyReceived} from you (pledge ${p.pledgeNo}).`, 'Thank you for giving what was needed!'] } });
   } else if (ev.homeId) {
     const snap = await a.db.doc(`homes/${ev.homeId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'Home not found' });
     const h = snap.data()!;
     if (ev.type === 'home.registered' && caller === h.adminId && h.status === 'Pending') {
       const admins = await a.db.collection('users').where('role', '==', 'platformAdmin').get();
-      msgs.push({ to: admins.docs.map((d) => d.id), title: 'New home to review', body: `${h.name} (${h.area}) registered`, url: '/platform' });
+      notes.push({ to: admins.docs.map((d) => d.id), title: 'New home to review', body: `${h.name} (${h.area}) registered`, path: '/platform',
+        email: { subject: `New home to review: ${h.name}`, lines: [`${h.name} (${h.type}, ${h.area}) registered on CareBridge and is waiting for approval.`] } });
     }
     if (ev.type === 'home.reviewed' && h.status !== 'Pending') {
       const me = await a.db.doc(`users/${caller}`).get();
-      if (me.data()?.role === 'platformAdmin')
-        msgs.push({ to: [h.adminId], title: h.status === 'Approved' ? 'Your home is approved 🎉' : 'Registration not approved', body: h.status === 'Approved' ? `${h.name} is now visible to donors. Add your wishlist!` : `${h.name} was not approved. Contact the CareBridge team.`, url: '/admin' });
-    }
-  }
-
-  let sent = 0;
-  for (const m of msgs) {
-    for (const uid of m.to) {
-      const u = await a.db.doc(`users/${uid}`).get();
-      const tokens: string[] = u.data()?.fcmTokens ?? [];
-      if (!tokens.length) continue;
-      const r = await a.messaging.sendEachForMulticast({ tokens, notification: { title: m.title, body: m.body }, data: { url: m.url }, webpush: { fcmOptions: { link: m.url } } });
-      sent += r.successCount;
-      const dead = tokens.filter((_, i) => {
-        const code = r.responses[i].error?.code ?? '';
-        return code.includes('registration-token-not-registered') || code.includes('invalid-registration-token');
-      });
-      if (dead.length) {
-        const { FieldValue } = await import('firebase-admin/firestore');
-        await u.ref.update({ fcmTokens: FieldValue.arrayRemove(...dead) });
+      if (me.data()?.role === 'platformAdmin') {
+        const ok = h.status === 'Approved';
+        notes.push({ to: [h.adminId], title: ok ? 'Your home is approved 🎉' : 'Registration not approved', body: ok ? `${h.name} is now visible to donors.` : `${h.name} was not approved.`, path: '/admin',
+          email: { subject: ok ? `${h.name} is approved on CareBridge` : 'CareBridge registration not approved', lines: ok ? [`Good news! ${h.name} is now visible to donors.`, 'Add or update your wishlist so donors know what you need.'] : [`${h.name} was not approved. Please contact the CareBridge team for details.`] } });
       }
     }
   }
-  return res.status(200).json({ ok: true, sent });
+
+  let pushed = 0;
+  let emailed = 0;
+  for (const n of notes) {
+    for (const uid of n.to) {
+      const u = await a.db.doc(`users/${uid}`).get();
+      const data = u.data() ?? {};
+      const link = `${appUrl}${n.path}`;
+      const tokens: string[] = data.fcmTokens ?? [];
+      if (tokens.length) {
+        const r = await a.messaging.sendEachForMulticast({ tokens, notification: { title: n.title, body: n.body }, data: { url: n.path }, webpush: { fcmOptions: { link } } });
+        pushed += r.successCount;
+        const dead = tokens.filter((_, i) => /not-registered|invalid-registration-token/.test(r.responses[i].error?.code ?? ''));
+        if (dead.length) await u.ref.update({ fcmTokens: FieldValue.arrayRemove(...dead) });
+      }
+      if (mailer && n.email && data.email && data.emailNotifications !== false) {
+        try {
+          await mailer.sendMail({ from: `CareBridge <${process.env.SMTP_USER}>`, to: data.email, subject: n.email.subject, text: `${n.email.lines.join('\n\n')}\n\n${link}`, html: emailHtml(n.email.lines, link, 'Open CareBridge') });
+          emailed++;
+        } catch (e) {
+          console.error('email failed', e);
+        }
+      }
+    }
+  }
+  return res.status(200).json({ ok: true, pushed, emailed });
 }

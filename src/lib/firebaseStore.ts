@@ -1,4 +1,7 @@
-import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut as fbSignOut } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword, getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect,
+  signOut as fbSignOut, type User,
+} from 'firebase/auth';
 import {
   arrayUnion, collection, doc, getCountFromServer, getDoc, getDocs, getFirestore, query, runTransaction, setDoc, updateDoc, where, writeBatch,
   type DocumentData, type QueryConstraint,
@@ -6,6 +9,7 @@ import {
 import { firebaseApp } from './firebase';
 import { applyPledge, applyReceived, applyRelease, bump, UserError, type Store } from './store';
 import { calcStatus, canPledge, makePledgeNo, stillNeeded } from './logic';
+import { isPlatformAdminEmail } from './admins';
 import type { Home, Pledge, UserProfile, WishlistItem } from './types';
 
 const AUTH_ERRORS: Record<string, string> = {
@@ -16,6 +20,10 @@ const AUTH_ERRORS: Record<string, string> = {
   'auth/weak-password': 'Password must be at least 6 characters.',
   'auth/invalid-email': 'That email address looks wrong.',
   'auth/too-many-requests': 'Too many attempts. Wait a minute and try again.',
+  'auth/popup-closed-by-user': 'Google sign-in was cancelled.',
+  'auth/cancelled-popup-request': 'Google sign-in was cancelled.',
+  'auth/unauthorized-domain': 'Google sign-in is not allowed on this website yet. Add this domain in Firebase → Authentication → Settings → Authorized domains.',
+  'auth/account-exists-with-different-credential': 'This email already has an account. Log in with email and password instead.',
 };
 const friendly = (e: unknown) => {
   const code = (e as { code?: string })?.code ?? '';
@@ -37,6 +45,25 @@ export function createFirebaseStore(): Store {
       return null; // not allowed by security rules → treat as not found
     }
   };
+  /** Details typed on the sign-up form, used when the profile is first created. */
+  let pending: { fullName: string; phone: string } | null = null;
+  /** Every signed-in account gets a users/{uid} profile (Google sign-ins on first visit, email sign-ups right away). */
+  async function ensureProfile(fu: User): Promise<UserProfile> {
+    const existing = await one<UserProfile>('users', fu.uid);
+    if (existing) {
+      if (existing.role === 'donor' && fu.emailVerified && isPlatformAdminEmail(fu.email ?? '')) {
+        await updateDoc(doc(db, 'users', fu.uid), { role: 'platformAdmin' });
+        return { ...existing, role: 'platformAdmin' };
+      }
+      return existing;
+    }
+    const email = (fu.email ?? '').toLowerCase();
+    const role = fu.emailVerified && isPlatformAdminEmail(email) ? 'platformAdmin' : 'donor';
+    const profile = { email, fullName: pending?.fullName || fu.displayName || email.split('@')[0], phone: pending?.phone ?? fu.phoneNumber ?? '', role, homeId: null };
+    pending = null;
+    await setDoc(doc(db, 'users', fu.uid), profile);
+    return { id: fu.uid, ...profile } as UserProfile;
+  }
   const write = async <T,>(fn: () => Promise<T>) => {
     try {
       const r = await fn();
@@ -55,18 +82,29 @@ export function createFirebaseStore(): Store {
     onAuth(cb) {
       return onAuthStateChanged(auth, async (fu) => {
         if (!fu) return cb(null);
-        const p = await one<UserProfile>('users', fu.uid);
-        cb(p ?? { id: fu.uid, email: fu.email ?? '', fullName: fu.email ?? '', phone: '', role: 'donor', homeId: null });
+        cb(await ensureProfile(fu));
       });
     },
     async signUp(email, password, fullName, phone) {
       try {
-        const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
-        await setDoc(doc(db, 'users', cred.user.uid), { email: email.trim().toLowerCase(), fullName, phone, role: 'donor', homeId: null });
-        // re-emit so the profile (not the fallback) reaches the app
-        await fbSignOut(auth);
-        await signInWithEmailAndPassword(auth, email.trim(), password);
+        pending = { fullName, phone };
+        await createUserWithEmailAndPassword(auth, email.trim(), password);
       } catch (e) {
+        pending = null;
+        throw friendly(e);
+      }
+    },
+    async signInWithGoogle() {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      try {
+        await signInWithPopup(auth, provider);
+      } catch (e) {
+        const code = (e as { code?: string })?.code;
+        if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+          await signInWithRedirect(auth, provider);
+          return;
+        }
         throw friendly(e);
       }
     },
@@ -82,6 +120,7 @@ export function createFirebaseStore(): Store {
     },
 
     getProfile: (uid) => one<UserProfile>('users', uid),
+    updateProfile: (uid, data) => write(() => updateDoc(doc(db, 'users', uid), data)),
     async saveFcmToken(uid, token) {
       await updateDoc(doc(db, 'users', uid), { fcmTokens: arrayUnion(token) });
     },

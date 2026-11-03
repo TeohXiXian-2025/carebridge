@@ -217,3 +217,5 @@ textarea.input { height: auto; min-height: 90px; padding: 12px 14px; resize: ver
 .pledge-actions { display: flex; gap: 10px; }
 .pledge-confirm { flex: 1; }
 @media (min-width: 900px) { .pledge-pair { flex-direction: row; } .pledge-pair > * { flex: 1; } .pledge-actions { justify-content: flex-end; } .pledge-confirm { flex: 0 0 auto; } }
+
+@media (max-width: 899px) { .container { padding: 0 20px 24px; gap: 14px; } }

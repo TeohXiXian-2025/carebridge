@@ -6,8 +6,10 @@ export interface Store {
   onAuth(cb: (u: UserProfile | null) => void): () => void;
   signUp(email: string, password: string, fullName: string, phone: string): Promise<void>;
   signIn(email: string, password: string): Promise<void>;
+  signInWithGoogle(): Promise<void>;
   signOut(): Promise<void>;
   getProfile(uid: string): Promise<UserProfile | null>;
+  updateProfile(uid: string, data: { fullName?: string; phone?: string; emailNotifications?: boolean }): Promise<void>;
   saveFcmToken(uid: string, token: string): Promise<void>;
 
   approvedHomes(): Promise<Home[]>;

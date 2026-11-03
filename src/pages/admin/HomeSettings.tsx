@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { HomeForm } from '../../components/HomeForm';
+import { AccountSettings } from '../../components/AccountSettings';
 import { useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 import type { Home } from '../../lib/types';
@@ -11,6 +12,8 @@ function Settings({ home }: { home: Home }) {
   return (
     <>
       <PageHeader title="Home profile" sub="Donors see this on your public page." right={<Link to={`/homes/${home.id}`} className="link">View public page →</Link>} />
+      <div style={{ maxWidth: 640 }}><AccountSettings /></div>
+      <h3>Home details</h3>
       <div className="card" style={{ maxWidth: 640, padding: 20 }}>
         <HomeForm
           initial={home}

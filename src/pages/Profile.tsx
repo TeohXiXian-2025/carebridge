@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { DonorLayout, PushPrompt } from '../components/layout';
+import { DonorLayout } from '../components/layout';
+import { AccountSettings } from '../components/AccountSettings';
 import { Avatar } from '../components/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -23,10 +24,10 @@ export default function Profile() {
               <Avatar name={user.fullName} />
               <div className="grow">
                 <h3>{user.fullName}</h3>
-                <p className="small">{user.email} · {user.phone}</p>
+                <p className="small">{user.role === 'donor' ? 'Donor' : user.role === 'homeAdmin' ? 'Welfare home admin' : 'Platform admin'}</p>
               </div>
             </div>
-            <PushPrompt text="Get notified when homes accept or receive your pledges." />
+            <AccountSettings />
             {user.role === 'homeAdmin' && <Link to="/admin" className="btn">Open my home dashboard</Link>}
             {user.role === 'platformAdmin' && <Link to="/platform" className="btn">Open platform admin</Link>}
             {user.role === 'donor' && (
@@ -34,6 +35,7 @@ export default function Profile() {
                 <b>Run a welfare home?</b>
                 <span>Register it to post a wishlist.</span>
                 <Link to="/register-home" className="link">Register a home →</Link>
+                <span className="small">Tip: use a separate account for your home, so your personal donations stay separate.</span>
               </div>
             )}
             <button className="btn btn-muted" onClick={() => api.signOut().then(() => nav('/'))}>Log out</button>

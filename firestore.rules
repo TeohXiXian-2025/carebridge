@@ -8,14 +8,22 @@ service cloud.firestore {
     function userDoc(id) { return /databases/$(database)/documents/users/$(id); }
     function isPlatform() { return signedIn() && exists(userDoc(uid())) && get(userDoc(uid())).data.role == 'platformAdmin'; }
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    // Platform admins don't sign up: these Google-verified emails become platform admins on first sign-in.
+    // Keep in sync with src/lib/admins.ts.
+    function platformAdminEmails() { return ['xixianteoh@gmail.com']; }
+    function verifiedEmail() { return request.auth.token.email_verified == true ? request.auth.token.email.lower() : ''; }
 
     match /users/{userId} {
       allow read: if signedIn() && (uid() == userId || isPlatform());
-      // New accounts are always donors.
-      allow create: if signedIn() && uid() == userId
-        && request.resource.data.role == 'donor' && request.resource.data.homeId == null;
+      // New accounts are donors, except the listed platform admin emails.
+      allow create: if signedIn() && uid() == userId && request.resource.data.homeId == null
+        && (request.resource.data.role == 'donor'
+            || (request.resource.data.role == 'platformAdmin' && verifiedEmail() in platformAdminEmails()));
       allow update: if isPlatform() || (signedIn() && uid() == userId && (
           !changed().hasAny(['role', 'homeId'])
+          // A listed admin email that first signed up as a donor is upgraded on its next Google sign-in.
+          || (resource.data.role == 'donor' && request.resource.data.role == 'platformAdmin'
+              && changed().hasOnly(['role']) && verifiedEmail() in platformAdminEmails())
           // W8: a donor becomes the admin of the home they are registering in the same batch.
           || (resource.data.role == 'donor' && request.resource.data.role == 'homeAdmin'
               && changed().hasOnly(['role', 'homeId'])

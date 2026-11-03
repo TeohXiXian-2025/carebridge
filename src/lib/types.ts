@@ -23,6 +23,8 @@ export interface UserProfile {
   phone: string;
   role: Role;
   homeId?: string | null;
+  /** false = no notification emails (app notifications are controlled by the device). */
+  emailNotifications?: boolean;
 }
 
 export interface Home {

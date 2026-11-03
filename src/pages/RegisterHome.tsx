@@ -22,8 +22,9 @@ export default function RegisterHome() {
   if (!user)
     return wrapper(
       <div className="card stack">
-        <p className="sub">Create an account or log in first. Then you can register your home here.</p>
-        <Link className="btn" to="/login?next=/register-home&mode=signup">Sign up / Log in</Link>
+        <p className="sub">Your home is linked to the account that registers it. Sign up (Google or email) first, then fill in your home's details.</p>
+        <Link className="btn" to="/login?next=/register-home&mode=signup&as=home">Sign up as a welfare home</Link>
+        <Link className="btn btn-ghost" to="/login?next=/register-home">I already have an account</Link>
       </div>,
     );
   if (user.role !== 'donor')

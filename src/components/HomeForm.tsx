@@ -26,7 +26,7 @@ export function HomeForm({ initial, submitLabel, onSubmit }: { initial?: Partial
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!v.name.trim() || !v.address.trim() || !v.about.trim()) return setErr('Fill in the home name, address and a short description.');
-    if (!/^\S+@\S+\.\S+$/.test(v.notifyEmail)) return setErr('Enter a contact email for pledge notifications.');
+    if (v.notifyEmail && !/^\S+@\S+\.\S+$/.test(v.notifyEmail)) return setErr('That contact email looks wrong.');
     setBusy(true);
     setErr(null);
     try {
@@ -53,7 +53,7 @@ export function HomeForm({ initial, submitLabel, onSubmit }: { initial?: Partial
       <Field label="About the home" hint="Who you care for and what you need most. Donors see this.">
         <textarea className="input" value={v.about} onChange={(e) => set('about', e.target.value)} maxLength={400} />
       </Field>
-      <Field label="Contact email" hint="New pledges are emailed here. Donors can also see it.">
+      <Field label="Public contact email (optional)" hint="Shown to donors. Pledge notifications go to the account you signed in with.">
         <input className="input" type="email" value={v.notifyEmail} onChange={(e) => set('notifyEmail', e.target.value)} />
       </Field>
       <Field label="Home photo (optional)">

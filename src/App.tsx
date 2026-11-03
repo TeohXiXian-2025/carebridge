@@ -16,7 +16,7 @@ import Dashboard from './pages/admin/Dashboard';
 import Wishlist from './pages/admin/Wishlist';
 import Pledges from './pages/admin/Pledges';
 import HomeSettings from './pages/admin/HomeSettings';
-import { Approvals, Overview } from './pages/platform/Platform';
+import { Approvals, Overview, PlatformAccount } from './pages/platform/Platform';
 
 function ScrollTop() {
   const { pathname } = useLocation();
@@ -55,6 +55,7 @@ export default function App() {
             <Route path="/admin/profile" element={<HomeSettings />} />
             <Route path="/platform" element={<Approvals />} />
             <Route path="/platform/overview" element={<Overview />} />
+            <Route path="/platform/account" element={<PlatformAccount />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

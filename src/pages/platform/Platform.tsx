@@ -7,6 +7,7 @@ import { formatTs, homeSummary } from '../../lib/logic';
 import type { Home } from '../../lib/types';
 import { useData, useIsDesktop } from '../../lib/useData';
 import { PageHeader } from '../admin/AdminShell';
+import { AccountSettings } from '../../components/AccountSettings';
 
 const Shell = ({ children }: { children: React.ReactNode }) => (
   <RequireRole role="platformAdmin">
@@ -169,6 +170,16 @@ export function Overview() {
           );
         })
       )}
+    </Shell>
+  );
+}
+
+/** Platform admin's own account and notification settings. */
+export function PlatformAccount() {
+  return (
+    <Shell>
+      <PageHeader title="Account" sub="Your details and notification settings" />
+      <div style={{ maxWidth: 640 }}><AccountSettings /></div>
     </Shell>
   );
 }

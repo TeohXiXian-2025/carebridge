@@ -14,9 +14,9 @@ The app is installable on phones (PWA) and sends push notifications. The same sc
 |---|---|
 | Web app | React + TypeScript + Vite, hosted on **Vercel** (Hobby) |
 | Login, database | **Firebase** Spark plan: Authentication (email/password) + Firestore |
-| Push notifications | Firebase Cloud Messaging, sent by the Vercel function `api/notify.ts` |
+| App + email notifications | Vercel function `api/notify.ts`: Firebase Cloud Messaging (push) and SMTP email |
 | Photos | Shrunk in the browser and stored in Firestore (Cloud Storage needs the paid Blaze plan) |
-| Emails (optional) | EmailJS free tier, sent from the browser |
+| Emails | Sent by the same Vercel function through a Gmail mailbox (App Password) |
 
 ## Run it locally
 
@@ -26,15 +26,17 @@ npm run dev        # demo mode: sample data in your browser, no Firebase needed
 ```
 
 Demo accounts (password `demo1234`): `donor@demo.test`, `admin@demo.test` (Sri Damai Elderly Home), `platform@demo.test`.
-To use the real Firebase project locally, copy `.env.production` to `.env.local`.
+To use the real Firebase project locally, copy `.env.production` to `.env.local`. Google sign-in only works on the live site or with Firebase configured.
 
 ## One-time Firebase setup
 
-1. **Authentication** → Sign-in method → enable **Email/Password**.
+1. **Authentication** → Sign-in method → enable **Google** and **Email/Password**. Then Settings → Authorized domains → add your Vercel domain (e.g. `carebridge-topaz-eta.vercel.app`).
 2. **Firestore** → create the database (production mode, `asia-southeast1`).
 3. **Firestore → Rules**: paste the contents of [`firestore.rules`](firestore.rules) and click **Publish**.
-4. **Make the first platform admin**: sign up in the app, then in Firestore → `users` → your document, change `role` to `platformAdmin`.
-5. **Push notifications** (optional): Project settings → Service accounts → **Generate new private key**. In Vercel → Project → Settings → Environment Variables, add `FIREBASE_SERVICE_ACCOUNT` and paste the whole JSON file as the value. Never commit this file.
+4. **Platform admin**: sign in with Google as an email listed in `src/lib/admins.ts` and `firestore.rules` (now xixianteoh@gmail.com). It becomes platform admin automatically.
+5. **Notifications** – Vercel → Project → Settings → Environment Variables, then redeploy:
+   - `FIREBASE_SERVICE_ACCOUNT`: Firebase → Project settings → Service accounts → Generate new private key → paste the whole JSON. Never commit this file.
+   - `SMTP_USER` / `SMTP_PASS`: the Gmail address that sends emails and its 16-letter App Password (Google Account → Security → 2-Step Verification on → App passwords).
 
 ## Deploy
 

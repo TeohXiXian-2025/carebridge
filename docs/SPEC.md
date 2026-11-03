@@ -15,8 +15,9 @@ Figma: https://www.figma.com/design/jHmYLe3TR7fmlCwH4OWXkK
 | Home Admin | Staff of one welfare home | Manage own home's wishlist and pledges, edit own home profile |
 | Platform Admin | CareBridge team | Approve or reject homes, see platform overview |
 
-New sign-ups are **Donor**. Registering a home makes the user a **Home Admin** of that home.
-Platform Admins are set by hand (Bubble: data editor; Firebase: change `role` in the Firestore console).
+**Sign-in:** "Continue with Google" (main) or email + password. Donors and welfare homes sign up themselves; at sign-up they choose **A donor** or **A welfare home**.
+A welfare home's account fills in the home form right after sign-up, and the home is linked to that Google account / email (one home per account).
+**Platform admins don't sign up.** Listed emails (now: xixianteoh@gmail.com) become Platform Admin automatically on their first Google sign-in. Bubble: set the role in the data editor.
 
 ## 2. Option sets (fixed values)
 
@@ -137,4 +138,13 @@ Breakpoint: below 900 px use the mobile layouts (bottom tab bar), from 900 px th
 | W3 | Donor | Pledge declined |
 | W5 | Donor | Thank you – your donation was received |
 
-Bubble: built-in "Send email". Code: EmailJS (free tier) from the browser, because Firebase Spark has no server functions.
+Every event is sent two ways: an **app notification** (push, on devices where the user turned it on) and an **email** (unless the user switched emails off in My account).
+Bubble: built-in "Send email" (push needs a paid plugin, so Bubble sends email only). Code: the Vercel function `api/notify.ts` sends both (Firebase Cloud Messaging + SMTP mailbox), because Firebase Spark has no server functions.
+
+| Event | App notification to |
+|---|---|
+| W1 new pledge | Home admin ("New pledge") and donor ("Pledge sent") |
+| W2 / W3 / W5 | Donor |
+| W4 donor cancels | Home admin |
+| W8 home registered | Platform admins |
+| W9 / W10 reviewed | Home admin |

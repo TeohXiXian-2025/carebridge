@@ -91,6 +91,15 @@ export function createLocalStore(): Store {
       commit();
       emitAuth();
     },
+    async signInWithGoogle() {
+      throw new UserError('Google sign-in works on the live site. In demo mode, use the demo accounts shown at the top.');
+    },
+    async updateProfile(id, data) {
+      const u = db.users.find((x) => x.id === id);
+      if (u) Object.assign(u, data);
+      commit();
+      emitAuth();
+    },
     async signOut() {
       db.session = null;
       commit();
