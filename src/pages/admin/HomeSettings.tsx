@@ -1,0 +1,30 @@
+import { Link } from 'react-router-dom';
+import { HomeForm } from '../../components/HomeForm';
+import { useToast } from '../../components/ui';
+import { api } from '../../lib/api';
+import type { Home } from '../../lib/types';
+import { HomeAdminPage, PageHeader } from './AdminShell';
+
+/** Home profile settings: photo, description, address, drop-off hours. */
+function Settings({ home }: { home: Home }) {
+  const toast = useToast();
+  return (
+    <>
+      <PageHeader title="Home profile" sub="Donors see this on your public page." right={<Link to={`/homes/${home.id}`} className="link">View public page →</Link>} />
+      <div className="card" style={{ maxWidth: 640, padding: 20 }}>
+        <HomeForm
+          initial={home}
+          submitLabel="Save changes"
+          onSubmit={async (v) => {
+            await api.updateHome(home.id, v);
+            toast('Profile saved');
+          }}
+        />
+      </div>
+    </>
+  );
+}
+
+export default function HomeSettingsPage() {
+  return <HomeAdminPage>{(home) => <Settings home={home} />}</HomeAdminPage>;
+}

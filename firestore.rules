@@ -1,0 +1,67 @@
+rules_version = '2';
+// CareBridge security rules = the "privacy rules" in docs/SPEC.md §6.
+// Paste into Firebase console → Firestore → Rules → Publish (or `firebase deploy --only firestore:rules`).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function userDoc(id) { return /databases/$(database)/documents/users/$(id); }
+    function isPlatform() { return signedIn() && exists(userDoc(uid())) && get(userDoc(uid())).data.role == 'platformAdmin'; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    match /users/{userId} {
+      allow read: if signedIn() && (uid() == userId || isPlatform());
+      // New accounts are always donors.
+      allow create: if signedIn() && uid() == userId
+        && request.resource.data.role == 'donor' && request.resource.data.homeId == null;
+      allow update: if isPlatform() || (signedIn() && uid() == userId && (
+          !changed().hasAny(['role', 'homeId'])
+          // W8: a donor becomes the admin of the home they are registering in the same batch.
+          || (resource.data.role == 'donor' && request.resource.data.role == 'homeAdmin'
+              && changed().hasOnly(['role', 'homeId'])
+              && getAfter(/databases/$(database)/documents/homes/$(request.resource.data.homeId)).data.adminId == uid())
+        ));
+    }
+
+    match /homes/{homeId} {
+      allow read: if resource.data.status == 'Approved'
+        || (signedIn() && (resource.data.adminId == uid() || isPlatform()));
+      allow create: if signedIn() && request.resource.data.adminId == uid() && request.resource.data.status == 'Pending';
+      // Home admins edit their profile; only platform admins approve or reject.
+      allow update: if isPlatform()
+        || (signedIn() && resource.data.adminId == uid() && !changed().hasAny(['status', 'adminId', 'reviewedAt', 'createdAt']));
+    }
+
+    match /items/{itemId} {
+      allow read: if resource.data.homeApproved == true
+        || (signedIn() && (resource.data.homeAdminId == uid() || isPlatform()));
+      allow create: if signedIn() && request.resource.data.homeAdminId == uid()
+        && get(userDoc(uid())).data.homeId == request.resource.data.homeId
+        && request.resource.data.homeApproved == (get(/databases/$(database)/documents/homes/$(request.resource.data.homeId)).data.status == 'Approved')
+        && request.resource.data.qtyPledged == 0 && request.resource.data.qtyReceived == 0;
+      allow update: if isPlatform()
+        || (signedIn() && resource.data.homeAdminId == uid() && !changed().hasAny(['homeId', 'homeAdminId', 'homeApproved']))
+        // Donor pledge workflows (W1, W4) may only move the pledged count and status, within range.
+        || (signedIn() && resource.data.homeApproved == true && changed().hasOnly(['qtyPledged', 'status'])
+            && request.resource.data.qtyPledged >= 0 && request.resource.data.qtyPledged <= resource.data.qtyNeeded);
+    }
+
+    match /pledges/{pledgeId} {
+      allow read: if signedIn() && (resource.data.donorId == uid() || resource.data.homeAdminId == uid() || isPlatform());
+      allow create: if signedIn() && request.resource.data.donorId == uid()
+        && request.resource.data.status == 'Pending' && request.resource.data.quantity > 0
+        && request.resource.data.homeAdminId == get(/databases/$(database)/documents/items/$(request.resource.data.itemId)).data.homeAdminId
+        // The item's pledged count must go up by exactly this pledge, in the same transaction.
+        && getAfter(/databases/$(database)/documents/items/$(request.resource.data.itemId)).data.qtyPledged
+           == get(/databases/$(database)/documents/items/$(request.resource.data.itemId)).data.qtyPledged + request.resource.data.quantity;
+      allow update: if isPlatform()
+        // W4: donor cancels.
+        || (signedIn() && resource.data.donorId == uid() && changed().hasOnly(['status'])
+            && request.resource.data.status == 'Cancelled' && resource.data.status in ['Pending', 'Accepted'])
+        // W2/W3/W5: home admin accepts, declines, marks received.
+        || (signedIn() && resource.data.homeAdminId == uid() && changed().hasOnly(['status', 'qtyReceived', 'receivedAt'])
+            && ((resource.data.status == 'Pending' && request.resource.data.status in ['Accepted', 'Declined'])
+                || (resource.data.status == 'Accepted' && request.resource.data.status == 'Received')));
+    }
+  }
+}
