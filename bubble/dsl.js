@@ -6,7 +6,7 @@
   const C = (k) => (k && k.startsWith('rgba') ? k : `var(--color_${k}_default)`);
   const M = (name, args, props) => { const m = { type: 'Message', name, is_slidable: false }; if (args !== undefined) m.args = args; if (props) m.properties = props; return m; };
   // chain(root, 'field', M(...), ...) — returns root with .next links
-  const chain = (root, ...ms) => { let last = root; for (const m of ms) { const mm = typeof m === 'string' ? M(m) : m; last.next = mm; last = mm; } return root; };
+  const chain = (root, ...ms) => { let last = root; while (last.next) last = last.next; for (const m of ms) { const mm = typeof m === 'string' ? M(m) : m; last.next = mm; last = mm; } return root; };
   const X = {
     P: (...f) => chain({ type: 'ElementParent', is_slidable: false }, ...f),            // parent group's thing / current cell
     CU: (...f) => chain({ type: 'CurrentUser', is_slidable: false }, ...f),
@@ -30,7 +30,7 @@
     empty: () => M('is_empty'), notEmpty: () => M('is_not_empty'), count: () => M('count'), first: () => M('first_element'),
     sortBy: (field, desc) => M('sorted', undefined, { sort_field: field, descending: !!desc }),
     fmtDate: (fmt) => M('format_date', undefined, { formatting_type: 'custom', custom_format: fmt }),
-    list: (...vals) => vals.slice(1).reduce((acc, v) => chain(acc, M('plus_element', v)), chain(vals[0], M('convert_to_list'))),
+    list: (...vals) => vals.slice(1).reduce((acc, v) => chain(acc, M('plus_element', v)), chain(vals[0], { type: 'Message', name: 'convert_to_list', is_slidable: true })),
   };
   const TX = (...parts) => ({ type: 'TextExpression', entries: Object.fromEntries(parts.map((p, i) => [i, p])) });
 
@@ -111,7 +111,7 @@
     Date: (name, ph, o = {}) => el('DateInput', name, { style: 'DateInput_standard_date_picker_', ph, fh: false, h: 46, ha: 'stretch', p: { input_type: 'date', ...(o.p || {}) }, ...o }),
     Check: (name, label, o = {}) => el('Checkbox', name, { label, fw: true, minw: 24, minh: 24, ...o }),
     Html: (name, html, o = {}) => el('HTML', name, { fh: true, p: { html: typeof html === 'string' ? TX(html) : html, ...(o.p || {}) }, ...o }),
-    Img: (name, src, o = {}) => el('Image', name, { p: { dynamic_image: src, ...(o.p || {}) }, ...o }),
+    Img: (name, src, o = {}) => el('Image', name, { p: { image: src, ...(o.p || {}) }, ...o }),
     RG: (name, type, ds, o, cell) => el('RepeatingGroup', name, { style: 'RepeatingGroup_transparent_', type, ds, fh: true, col: 1, p: { columns: o.cols || 1, fixed_columns: true, fixed_rows: false, show_all_items: true, separator_style: 'solid', separator_width: o.sep ?? 12, separator_color: 'rgba(0,0,0,0)', cell_min_height_css: '0px', ...(o.p || {}) }, ...o }, [cell]),
     Popup: (name, o, kids) => el('Popup', name, { style: o.style || 'Popup_standard_popup_', col: 1, gap: 14, pad: 24, ...o }, kids),
   };
