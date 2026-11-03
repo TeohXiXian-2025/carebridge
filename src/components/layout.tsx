@@ -167,7 +167,7 @@ export function AdminLayout({ nav, subtitle, children }: { nav: NavItem[]; subti
           </div>
           {nav.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end} className="nav">
-              <i />
+              <i>{n.icon}</i>
               {n.label}
             </NavLink>
           ))}

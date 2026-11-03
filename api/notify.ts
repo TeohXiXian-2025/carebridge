@@ -13,17 +13,26 @@
  * The caller must be signed in, and only the people involved in the named pledge or home are
  * notified, so the endpoint can't be used to message anyone else.
  */
-import { cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import { FieldValue, getFirestore } from 'firebase-admin/firestore';
-import { getMessaging } from 'firebase-admin/messaging';
-import nodemailer from 'nodemailer';
+// Libraries are loaded inside the handler (not at the top), so a loading problem is
+// reported as a readable error instead of crashing the whole function.
+type Admin = { auth: import('firebase-admin/auth').Auth; db: import('firebase-admin/firestore').Firestore; messaging: import('firebase-admin/messaging').Messaging };
+type Mailer = import('nodemailer').Transporter | null;
+let FieldValue: typeof import('firebase-admin/firestore').FieldValue;
 
 type Req = { method?: string; headers: Record<string, string | string[] | undefined>; body?: unknown };
 type Res = { status(code: number): Res; json(body: unknown): void };
 type Note = { to: string[]; title: string; body: string; path: string; email?: { subject: string; lines: string[] }; toEmail?: string };
 
-function admin() {
+let adminCache: Admin | null = null;
+async function admin(): Promise<Admin> {
+  if (adminCache) return adminCache;
+  const [{ cert, getApps, initializeApp }, { getAuth }, fs, { getMessaging }] = await Promise.all([
+    import('firebase-admin/app'),
+    import('firebase-admin/auth'),
+    import('firebase-admin/firestore'),
+    import('firebase-admin/messaging'),
+  ]);
+  FieldValue = fs.FieldValue;
   if (!getApps().length) {
     const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
     if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT is not set');
@@ -32,17 +41,19 @@ function admin() {
     if (typeof sa.private_key === 'string') sa.private_key = sa.private_key.replace(/\\n/g, '\n');
     initializeApp({ credential: cert(sa) });
   }
-  return { auth: getAuth(), db: getFirestore(), messaging: getMessaging() };
+  adminCache = { auth: getAuth(), db: fs.getFirestore(), messaging: getMessaging() };
+  return adminCache;
 }
 
-const mailer = process.env.SMTP_USER && process.env.SMTP_PASS
-  ? nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: Number(process.env.SMTP_PORT || 465),
-      secure: Number(process.env.SMTP_PORT || 465) === 465,
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    })
-  : null;
+let mailerCache: Mailer | undefined;
+async function getMailer(): Promise<Mailer> {
+  if (mailerCache !== undefined) return mailerCache;
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return (mailerCache = null);
+  const nodemailer = (await import('nodemailer')).default;
+  const port = Number(process.env.SMTP_PORT || 465);
+  mailerCache = nodemailer.createTransport({ host: process.env.SMTP_HOST || 'smtp.gmail.com', port, secure: port === 465, auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } });
+  return mailerCache;
+}
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 function emailHtml(lines: string[], link: string, button: string) {
@@ -55,6 +66,7 @@ function emailHtml(lines: string[], link: string, button: string) {
 const fmtDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long' });
 
 async function main(req: Req, res: Res) {
+  const mailer = await getMailer();
   // GET = self-test. Shows only whether each part works (never the secrets).
   if (req.method === 'GET') {
     const out: Record<string, unknown> = { serviceAccountSet: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT), emailConfigured: Boolean(mailer) };
@@ -66,7 +78,7 @@ async function main(req: Req, res: Res) {
       out.serviceAccountJson = `not valid JSON: ${(e as Error).message}`;
     }
     try {
-      const a = admin();
+      const a = await admin();
       await a.db.collection('users').limit(1).get();
       out.firestore = 'ok';
       await a.messaging.send({ token: 'self-test-invalid-token', notification: { title: 't' } }, true).catch((e: { code?: string; message?: string }) => {
@@ -87,9 +99,9 @@ async function main(req: Req, res: Res) {
     return res.status(200).json(out);
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
-  let a: ReturnType<typeof admin>;
+  let a: Admin;
   try {
-    a = admin();
+    a = await admin();
   } catch (e) {
     return res.status(503).json({ error: (e as Error).message });
   }
