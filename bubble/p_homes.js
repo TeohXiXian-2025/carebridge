@@ -25,7 +25,7 @@
   const catHomes = () => { const s = S('wishlistitem', [['homeapproved_boolean', true], ['category_option_category', V('Category Dropdown')], ['status_option_itemstatus', OV('itemstatus', 'Fulfilled'), 'not equal']]); return chain(s, 'home_custom_home'); };
   const isPhone = () => chain(X.W(), X.lt(900));
   const isDesk = () => chain(X.W(), X.M('greater_than', 899));
-  const urgentOn = (sfx) => chain(V('Urgent Checkbox' + sfx), X.eq(true));
+  const urgentOn = (sfx) => V('Urgent Checkbox' + sfx);
   const catOn = () => chain(V('Category Dropdown'), X.notEmpty());
   const and = (a, b) => chain(a, X.and(b));
   const sorted = (e) => chain(e, X.sortBy('name_text'));

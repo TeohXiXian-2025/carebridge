@@ -33,7 +33,7 @@
       B.Ghost(prefix + ' Phone Logout', 'Log out', { h: 32, fs: 12, fc: 'mutedtext', pad: [0, 12, 0, 12] }),
     ]);
     const tabBtn = (n) => B.Ghost(prefix + ' Tab ' + n.label, n.icon + '\n' + n.label, { full: true, ha: 'stretch', h: 56, fs: 11, fwt: 600, bg: 'white', fc: 'mutedtext', p: { border_width: 0 }, when: [[n.on(), { fc: 'primaryteal' }]] });
-    const phoneTabs = el('FloatingGroup', prefix + ' Phone Tabs', { row: 1, bg: 'white', border: [1, 'lines'], pad: [4, 8, 8, 8], hide: true, when: [mob({ show: 1 })], p: { floating_reference: 'bottom', float_zindex: 10, fit_width: false } }, nav.map(tabBtn));
+    const phoneTabs = el('FloatingGroup', prefix + ' Phone Tabs', { style: 'FloatingGroup_shadow_', row: 1, bg: 'white', border: [1, 'lines'], pad: [4, 8, 8, 8], hide: true, when: [mob({ show: 1 })], p: { floating_reference: 'bottom', fit_width: false } }, nav.map(tabBtn));
     function el(t, n, o, k) { return window.CB.el(t, n, o, k); }
     const main = B.G(prefix + ' Content', { col: 1, gap: 20, pad: [32, 32, 40, 32], maxw: 1040, when: [mob({ pad: [16, 16, 96, 16], gap: 16 })] }, content);
     return [phoneTop, B.G(prefix + ' Page Row', { row: 1, fh: false, p: { min_height_css: '100vh' }, when: [mob({ col: 1 })] }, [sidebar, main]), phoneTabs, ...(popups || [])];

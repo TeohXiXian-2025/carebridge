@@ -6,7 +6,7 @@
   const C = (k) => (k && k.startsWith('rgba') ? k : `var(--color_${k}_default)`);
   const M = (name, args, props) => { const m = { type: 'Message', name, is_slidable: false }; if (args !== undefined) m.args = args; if (props) m.properties = props; return m; };
   // chain(root, 'field', M(...), ...) — returns root with .next links
-  const chain = (root, ...ms) => { let last = root; while (last.next) last = last.next; for (const m of ms) { const mm = typeof m === 'string' ? M(m) : m; last.next = mm; last = mm; } return root; };
+  const chain = (root0, ...ms) => { const root = JSON.parse(JSON.stringify(root0)); let last = root; while (last.next) last = last.next; for (const m of ms) { const mm = typeof m === 'string' ? M(m) : m; last.next = mm; last = mm; } return root; };
   const TXs = (t) => ({ type: 'TextExpression', entries: { 0: t } });
   const X = {
     P: (...f) => chain({ type: 'ElementParent', is_slidable: false }, ...f),            // parent group's thing / current cell
@@ -106,15 +106,15 @@
     Tag: (name, text, color, o = {}) => el('Text', name, { style: 'Text_tag_' + color + '_cb_', text, fw: true, ...o }),
     Btn: (name, text, o = {}) => el('Button', name, { style: 'Button_primary_cb_', text, fw: o.full ? false : true, ...o }),
     Ghost: (name, text, o = {}) => el('Button', name, { style: 'Button_ghost_cb_', text, fw: o.full ? false : true, ...o }),
-    Link: (name, text, page, o = {}) => el('Link', name, { style: 'Link_link_light_primary_', text, fw: true, p: { linktype: 'pagelink', page, ...(o.p || {}) }, ...o }),
-    In: (name, ph, fmt = 'text', o = {}) => el('Input', name, { style: 'Input_cb_', ph, fh: false, h: 46, ha: 'stretch', p: { content_format: fmt, ...(o.p || {}) }, ...o }),
-    Area: (name, ph, o = {}) => el('MultiLineInput', name, { style: 'MultiLineInput_standard_multiline_input_', ph, fh: false, h: 96, ha: 'stretch', p: { padding_top: 11, padding_bottom: 11, ...(o.p || {}) }, ...o }),
-    Drop: (name, ph, set, o = {}) => el('Dropdown', name, { style: 'Dropdown_standard_dropdown_', ph, fh: false, h: 46, ha: 'stretch', p: { data_source: X.ALL(set), dynamic_type: 'option.' + set, choices_style: 'dynamic', option_display_expression: TX(X.chain({ type: 'InjectedValue', is_slidable: false }, 'display')), ...(o.p || {}) }, ...o }),
-    Date: (name, ph, o = {}) => el('DateInput', name, { style: 'DateInput_standard_date_picker_', ph, fh: false, h: 46, ha: 'stretch', p: { input_type: 'date', ...(o.p || {}) }, ...o }),
+    Link: (name, text, page, o = {}) => el('Link', name, { style: 'Link_link_light_primary_', text, fw: true, ...o, p: { linktype: 'pagelink', page, ...(o.p || {}) } }),
+    In: (name, ph, fmt = 'text', o = {}) => el('Input', name, { style: 'Input_cb_', ph, fh: false, h: 46, ha: 'stretch', ...o, p: { content_format: fmt, ...(o.p || {}) } }),
+    Area: (name, ph, o = {}) => el('MultiLineInput', name, { style: 'MultiLineInput_standard_multiline_input_', ph, fh: false, h: 96, ha: 'stretch', ...o, p: { padding_top: 11, padding_bottom: 11, ...(o.p || {}) } }),
+    Drop: (name, ph, set, o = {}) => el('Dropdown', name, { style: 'Dropdown_standard_dropdown_', ph, fh: false, h: 46, ha: 'stretch', ...o, p: { data_source: X.ALL(set), dynamic_type: 'option.' + set, choices_style: 'dynamic', option_display_expression: TX(X.chain({ type: 'InjectedValue', is_slidable: false }, 'display')), ...(o.p || {}) } }),
+    Date: (name, ph, o = {}) => el('DateInput', name, { style: 'DateInput_standard_date_picker_', ph, fh: false, h: 46, ha: 'stretch', ...o, p: { input_type: 'date', ...(o.p || {}) } }),
     Check: (name, label, o = {}) => el('Checkbox', name, { label, fw: true, minw: 24, minh: 24, ...o }),
-    Html: (name, html, o = {}) => el('HTML', name, { fh: true, p: { html: typeof html === 'string' ? TX(html) : html, ...(o.p || {}) }, ...o }),
-    Img: (name, src, o = {}) => el('Image', name, { p: { image: src, ...(o.p || {}) }, ...o }),
-    RG: (name, type, ds, o, cell) => el('RepeatingGroup', name, { style: 'RepeatingGroup_transparent_', type, ds, fh: true, col: 1, p: { columns: o.cols || 1, fixed_columns: true, fixed_rows: false, show_all_items: true, separator_style: 'solid', separator_width: o.sep ?? 12, separator_color: 'rgba(0,0,0,0)', cell_min_height_css: '0px', ...(o.p || {}) }, ...o }, [cell]),
+    Html: (name, html, o = {}) => el('HTML', name, { fh: true, ...o, p: { html: typeof html === 'string' ? TX(html) : html, ...(o.p || {}) } }),
+    Img: (name, src, o = {}) => el('Image', name, { ...o, p: { image: src, ...(o.p || {}) } }),
+    RG: (name, type, ds, o, cell) => el('RepeatingGroup', name, { style: 'RepeatingGroup_transparent_', type, ds, fh: true, col: 1, ...o, p: { columns: o.cols || 1, fixed_columns: true, fixed_rows: false, show_all_items: true, separator_style: 'solid', separator_width: o.sep ?? 12, separator_color: 'rgba(0,0,0,0)', cell_min_height_css: '0px', ...(o.p || {}) } }, [cell]),
     Popup: (name, o, kids) => el('Popup', name, { col: 1, gap: 14, pad: 24, ...o }, kids),
   };
 
