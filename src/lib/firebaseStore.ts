@@ -133,7 +133,24 @@ export function createFirebaseStore(): Store {
         stopProfile();
         stopWatching();
         if (!fu) return cb(null);
-        cb(await ensureProfile(fu));
+        try {
+          cb(await ensureProfile(fu));
+        } catch (e) {
+          const code = (e as { code?: string })?.code ?? '';
+          const msg = (e as Error)?.message ?? '';
+          const problem =
+            code === 'permission-denied'
+              ? 'You are signed in, but the database blocked your profile. In Firebase → Firestore Database → Rules, paste firestore.rules from GitHub and click Publish, then reload.'
+              : code === 'not-found' || /does not exist/i.test(msg)
+                ? 'You are signed in, but the Firestore database has not been created. In Firebase → Firestore Database → Create database, then reload.'
+                : code === 'unavailable'
+                  ? 'You are signed in, but the database cannot be reached. Check your internet connection and reload.'
+                  : `You are signed in, but your profile could not be loaded (${code || msg}).`;
+          console.error('Profile load failed:', e);
+          const email = (fu.email ?? '').toLowerCase();
+          cb({ id: fu.uid, email, fullName: fu.displayName || email.split('@')[0], phone: '', role: 'donor', homeId: null }, problem);
+          return;
+        }
         // Role or details changed elsewhere (invite accepted, removed as manager, made admin) → update straight away.
         stopProfile = onSnapshot(doc(db, 'users', fu.uid), (s) => s.exists() && cb(withId<UserProfile>(s)), () => {});
       });

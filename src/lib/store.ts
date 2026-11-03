@@ -3,7 +3,8 @@ import { calcStatus } from './logic';
 
 export interface Store {
   mode: 'local' | 'firebase';
-  onAuth(cb: (u: UserProfile | null) => void): () => void;
+  /** `problem` = signed in, but the profile couldn't be loaded (e.g. Firestore rules not published). */
+  onAuth(cb: (u: UserProfile | null, problem?: string) => void): () => void;
   signUp(email: string, password: string, fullName: string, phone: string): Promise<void>;
   signIn(email: string, password: string): Promise<void>;
   signInWithGoogle(): Promise<void>;

@@ -37,9 +37,9 @@ const what = (p: Pledge, qty = p.quantity) => `${p.itemName} × ${qty}`;
 export const api: Store = {
   ...base,
   onAuth(cb) {
-    return base.onAuth((u) => {
+    return base.onAuth((u, problem) => {
       me = u;
-      cb(u);
+      cb(u, problem);
     });
   },
   async registerHome(user, data) {
