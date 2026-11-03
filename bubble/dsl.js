@@ -149,6 +149,11 @@
   const tokens = () => { const c = JSON.parse(localStorage.getItem('cb_index_copy')); return c.elements[1].color_tokens; };
   function putElements(list) {
     const ct = tokens();
+    // resolve "@Element name" references to the ids of elements in this same paste (Bubble remaps them on paste)
+    const names = {}; const w = (e) => { names[e.name] = e.id; Object.values(e.elements || {}).forEach(w); }; list.forEach(w);
+    const missing = new Set();
+    list = JSON.parse(JSON.stringify(list).replace(/"@([^"]+)"/g, (_, nm) => { if (!names[nm]) { missing.add(nm); return JSON.stringify('@' + nm); } return JSON.stringify(names[nm]); }));
+    if (missing.size) throw new Error('Unknown element names: ' + [...missing].join(', '));
     const els = list.map((e) => ({ ...e, said: SAID, color_tokens: ct, font_tokens: {} }));
     const out = JSON.stringify({ type: 'copy', elements: els });
     const now = String(Date.now());
