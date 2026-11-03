@@ -7,6 +7,7 @@
   const M = (name, args, props) => { const m = { type: 'Message', name, is_slidable: false }; if (args !== undefined) m.args = args; if (props) m.properties = props; return m; };
   // chain(root, 'field', M(...), ...) — returns root with .next links
   const chain = (root, ...ms) => { let last = root; while (last.next) last = last.next; for (const m of ms) { const mm = typeof m === 'string' ? M(m) : m; last.next = mm; last = mm; } return root; };
+  const TXs = (t) => ({ type: 'TextExpression', entries: { 0: t } });
   const X = {
     P: (...f) => chain({ type: 'ElementParent', is_slidable: false }, ...f),            // parent group's thing / current cell
     CU: (...f) => chain({ type: 'CurrentUser', is_slidable: false }, ...f),
@@ -24,7 +25,7 @@
     W: () => X.PD('Current Page Width'),
     M, chain,
     // message helpers
-    eq: (v) => M('equals', v), ne: (v) => M('not_equals', v), lt: (v) => M('less_than', v), gt: (v) => M('greater_than', v),
+    eq: (v) => M('equals', typeof v === 'string' ? TXs(v) : v), ne: (v) => M('not_equals', typeof v === 'string' ? TXs(v) : v), lt: (v) => M('less_than', v), gt: (v) => M('greater_than', v),
     plus: (v) => M('plus', v), minus: (v) => M('minus', v), times: (v) => M('times', v), div: (v) => M('divide', v),
     and: (v) => M('and_', v), or: (v) => M('or_', v),
     empty: () => M('is_empty'), notEmpty: () => M('is_not_empty'), count: () => M('count'), first: () => M('first_element'),
