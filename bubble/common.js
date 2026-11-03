@@ -86,7 +86,7 @@
   };
 
   const loggedIn = () => CU('logged_in');
-  const notLoggedIn = () => chain(CU('logged_in'), X.eq(false));
+  const notLoggedIn = () => CU('not_logged_in');
   // Give every untyped group inside a cell the cell's type, so "Parent group's thing" works at any depth.
   function typed(root, type) {
     const gt = type.includes('.') || type === 'user' ? type : 'custom.' + type;

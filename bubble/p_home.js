@@ -125,7 +125,8 @@
   // ---------- workflows ----------
   const qty = () => V('Qty Input');
   const valid = () => and(and(and(and(chain(qty(), X.gt(0)), chain(qty(), M('less_or_equal_than', still(cell)))), chain(V('Date Input'), X.notEmpty())), chain(V('Name Input'), X.notEmpty())), chain(V('Phone Input'), X.notEmpty()));
-  const invalid = () => { const v = valid(); return chain(v, X.eq(false)); };
+  const or = (a, b) => chain(a, X.or(b));
+  const invalid = () => or(or(or(or(chain(qty(), X.lt(1)), chain(qty(), X.gt(still(cell)))), chain(V('Date Input'), X.empty())), chain(V('Name Input'), X.empty())), chain(V('Phone Input'), X.empty()));
   const what = () => [chain(cell(), 'name_text'), ' × ', qty()];
   const W1 = [
     A.create('pledge', {
@@ -151,7 +152,7 @@
     workflows: [
       ...CATS.map(([label, val]) => wf('Category ' + label, { type: 'ButtonClicked', el: 'Cat ' + label }, [go(val)])),
       wf('Pledge open', { type: 'ButtonClicked', el: 'Pledge Button', cond: and(X.CU('logged_in'), isOpen(cell)) }, [A.display('Pledge Popup', cell()), A.show('Pledge Popup')]),
-      wf('Pledge needs login', { type: 'ButtonClicked', el: 'Pledge Button', cond: chain(X.CU('logged_in'), X.eq(false)) }, [A.go('login', null, { mode: 'login' })]),
+      wf('Pledge needs login', { type: 'ButtonClicked', el: 'Pledge Button', cond: X.CU('not_logged_in') }, [A.go('login', null, { mode: 'login' })]),
       wf('Close sheet', { type: 'ButtonClicked', el: 'Pop Close' }, [A.hide('Pledge Popup')]),
       wf('Cancel sheet', { type: 'ButtonClicked', el: 'Pop Cancel' }, [A.hide('Pledge Popup')]),
       wf('Confirm pledge W1', { type: 'ButtonClicked', el: 'Confirm Button', cond: valid() }, W1),
