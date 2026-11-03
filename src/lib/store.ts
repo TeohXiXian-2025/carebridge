@@ -8,6 +8,8 @@ export interface Store {
   signUp(email: string, password: string, fullName: string, phone: string): Promise<void>;
   signIn(email: string, password: string): Promise<void>;
   signInWithGoogle(): Promise<void>;
+  /** Sends a password-reset email (email + password accounts). */
+  resetPassword(email: string): Promise<void>;
   signOut(): Promise<void>;
   getProfile(uid: string): Promise<UserProfile | null>;
   updateProfile(uid: string, data: { fullName?: string; phone?: string; emailNotifications?: boolean }): Promise<void>;

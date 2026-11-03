@@ -106,6 +106,9 @@ export function createLocalStore(): Store {
       commit();
       emitAuth();
     },
+    async resetPassword() {
+      throw new UserError('Password reset emails work on the live site. Demo accounts use the password demo1234.');
+    },
     async signInWithGoogle() {
       throw new UserError('Google sign-in works on the live site. In demo mode, use the demo accounts shown at the top.');
     },

@@ -1,6 +1,6 @@
 import {
   createUserWithEmailAndPassword, getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect,
-  sendEmailVerification, signOut as fbSignOut, type User,
+  sendEmailVerification, sendPasswordResetEmail, signOut as fbSignOut, type User,
 } from 'firebase/auth';
 import {
   addDoc, arrayUnion, collection, deleteDoc, doc, onSnapshot, queryEqual, refEqual, getCountFromServer, getDoc, getDocs, getFirestore, query, runTransaction, setDoc, updateDoc, where, writeBatch,
@@ -23,11 +23,18 @@ const AUTH_ERRORS: Record<string, string> = {
   'auth/popup-closed-by-user': 'Google sign-in was cancelled.',
   'auth/cancelled-popup-request': 'Google sign-in was cancelled.',
   'auth/unauthorized-domain': 'Google sign-in is not allowed on this website yet. Add this domain in Firebase → Authentication → Settings → Authorized domains.',
-  'auth/account-exists-with-different-credential': 'This email already has an account. Log in with email and password instead.',
+  'auth/account-exists-with-different-credential': 'This email already has an account made with email and password. Log in with the email form below (use Forgot password if needed).',
+  'auth/admin-restricted-operation': 'This Google account is not allowed to sign in here. University/work accounts are often blocked by their admin. Use a personal Gmail or the email form.',
+  'auth/user-disabled': 'This account has been disabled. Contact the CareBridge team.',
+  'auth/popup-blocked': 'Your browser blocked the Google pop-up. Allow pop-ups for this site and try again.',
+  'auth/network-request-failed': 'No internet connection. Check your connection and try again.',
+  'auth/missing-email': 'Enter your email first.',
 };
 const friendly = (e: unknown) => {
   const code = (e as { code?: string })?.code ?? '';
-  return new UserError(AUTH_ERRORS[code] ?? (e as Error)?.message ?? 'Something went wrong.');
+  const text = AUTH_ERRORS[code] ?? (e as Error)?.message ?? 'Something went wrong.';
+  // The code helps the team see exactly what failed (e.g. auth/unauthorized-domain).
+  return new UserError(code && !text.includes(code) ? `${text} (${code})` : text);
 };
 
 export function createFirebaseStore(): Store {
@@ -181,6 +188,15 @@ export function createFirebaseStore(): Store {
           await signInWithRedirect(auth, provider);
           return;
         }
+        throw friendly(e);
+      }
+    },
+    async resetPassword(email) {
+      try {
+        await sendPasswordResetEmail(auth, email.trim());
+      } catch (e) {
+        // Don't reveal whether the email has an account.
+        if ((e as { code?: string })?.code === 'auth/user-not-found') return;
         throw friendly(e);
       }
     },

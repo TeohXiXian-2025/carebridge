@@ -33,6 +33,18 @@ export default function Login() {
   const [phone, setPhone] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
+  async function forgot() {
+    setErr(null);
+    setInfo(null);
+    if (!/^\S+@\S+\.\S+$/.test(email)) return setErr('Type your email in the Email box first, then tap Forgot password.');
+    try {
+      await api.resetPassword(email);
+      setInfo(`If ${email.trim()} has a CareBridge password, a reset link is on its way. Check your inbox and spam folder.`);
+    } catch (e2) {
+      setErr(e2 instanceof UserError ? e2.message : 'Could not send the reset email.');
+    }
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -134,6 +146,12 @@ export default function Login() {
             <Field label="Password" hint={mode === 'signup' ? 'At least 6 characters.' : undefined}>
               <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={6} />
             </Field>
+            {mode === 'login' && (
+              <button type="button" className="link" style={{ alignSelf: 'flex-end', marginTop: -8 }} onClick={forgot}>
+                Forgot password?
+              </button>
+            )}
+            {info && <div className="note">{info}</div>}
             <ErrorBox msg={err} />
             <button className="btn btn-block" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Log in' : 'Create account'}</button>
             {mode === 'login' && (
