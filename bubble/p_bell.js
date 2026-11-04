@@ -19,7 +19,7 @@
       B.T(pfx + ' Notif Body', TX(chain(cell(), 'body_text')), { fs: 12, fc: 'mutedtext' }),
       B.Sm(pfx + ' Notif Time', TX(chain(cell(), 'Created Date', X.fmtDate('d mmm, h:MM a'))), { fs: 11 }),
     ]);
-    const panel = (refId) => el('GroupFocus', pfx + ' Notif Panel', { col: 1, gap: 0, bg: 'white', border: [1, 'lines'], r: 16, p: { reference: refId, offset_top: 46, offset_left: opts.left ?? -300, width: 340, single_width: true, min_width_css: '300px', max_width_css: '340px', is_visible: false, boxshadow_style: 'outset', boxshadow_horizontal: 0, boxshadow_vertical: 8, boxshadow_blur: 24, boxshadow_color: 'rgba(31,42,46,0.12)', overflow: 'hidden' } }, [
+    const panel = (refId) => el('GroupFocus', pfx + ' Notif Panel', { col: 1, gap: 0, bg: 'white', border: [1, 'lines'], r: 16, p: { reference: refId, offset_top: opts.top ?? 46, offset_left: opts.left ?? -300, width: 340, single_width: true, min_width_css: '300px', max_width_css: '340px', is_visible: false, boxshadow_style: 'outset', boxshadow_horizontal: 0, boxshadow_vertical: 8, boxshadow_blur: 24, boxshadow_color: 'rgba(31,42,46,0.12)', overflow: 'hidden' } }, [
       B.G(pfx + ' Notif Head', { row: 1, cva: 'center', pad: [12, 14, 12, 14] }, [
         B.H3(pfx + ' Notif Head Title', 'Notifications', { fs: 15 }),
         B.Ghost(pfx + ' Mark All Read', 'Mark all read', { h: 28, fs: 12, fwt: 700, fc: 'primaryteal', p: { border_width: 0 }, hide: true, when: [[chain(unread(), X.count(), X.gt(0)), { show: 1 }]] }),
