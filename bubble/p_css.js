@@ -8,6 +8,8 @@
   const phone = (css) => `@media (max-width:899px){${css}}`;
   const desk = (css) => `@media (min-width:900px){${css}}`;
   const wrap = (css) => `<style>${css}</style>`;
+  // Red unread badge on the bell's top-right corner (not under the icon)
+  const badge = (btn, b, rel = true) => `${rel ? `${cls(btn)}{position:relative!important}` : ''}${cls(btn)}{overflow:visible!important}${cls(b)}{position:absolute!important;top:-5px;right:-7px;margin:0!important;z-index:2}`;
 
   // Donor pages (CSS lives in the Header reusable, which every donor page has)
   const donor = {
@@ -17,19 +19,19 @@
   const donorCss = wrap(
     phone(stack(donor.stack) + `${cls('bTGZB')}{width:100%!important}`) +
     // bell before the avatar and vertically centred, like the coded header
-    `${cls(donor.bell)}{order:1;align-self:center!important;margin:0!important}.hd_av{order:2;align-self:center!important}`
+    badge('bTJOg', 'bTJOm') + `${cls(donor.bell)}{order:1;align-self:center!important;margin:0!important}.hd_av{order:2;align-self:center!important}`
   );
 
   // Admin page
   const sidebarBell = (sidebar, bell, panel) => desk(`${cls(sidebar)}{position:relative!important}${cls(bell)}{position:absolute!important;top:26px;right:16px;z-index:5}${cls(panel)}{position:fixed!important;top:72px!important;left:150px!important}`);
   const adminCss = wrap(
     phone(stack(['bTIUg', 'bTIaf', 'bTIXr', 'bTIdw', 'bTIeb']) + grid('bTITe', 3) + `${cls('bTJRs')}{align-self:center!important}`) +
-    sidebarBell('bTIOI', 'bTJRW', 'bTJSL')
+    sidebarBell('bTIOI', 'bTJRW', 'bTJSL') + badge('bTJRW', 'bTJRc', false) + badge('bTJRs', 'bTJRy')
   );
   // Platform page
   const platformCss = wrap(
     phone(stack(['bTIvC', 'bTIwO', 'bTIyZ', 'bTJEy']) + grid('bTIzy', 2) + `${cls('bTIvG')}{width:100%!important}${cls('bTJVW')}{align-self:center!important}`) +
-    sidebarBell('bTIsO', 'bTJVA', 'bTJVp')
+    sidebarBell('bTIsO', 'bTJVA', 'bTJVp') + badge('bTJVA', 'bTJVG', false) + badge('bTJVW', 'bTJVc')
   );
   window.CBCSS = { donorCss, adminCss, platformCss, cls };
 })();
