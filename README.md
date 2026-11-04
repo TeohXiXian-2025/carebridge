@@ -4,7 +4,7 @@
 |---|---|
 | 🌐 **Live app** | https://carebridge-topaz-eta.vercel.app |
 | 🎨 **Figma design** (mobile + desktop) | https://www.figma.com/design/jHmYLe3TR7fmlCwH4OWXkK |
-| 🧩 **Bubble.io version** | _coming soon_ |
+| 🧩 **Bubble.io version** (test version, free plan) | https://xixianteoh.bubbleapps.io/version-test |
 | 📘 **User manual** (PDF) | [docs/CareBridge-User-Manual.pdf](docs/CareBridge-User-Manual.pdf) |
 | 🛠️ **Developer manual & test checklist** (PDF) | [docs/CareBridge-Developer-Manual.pdf](docs/CareBridge-Developer-Manual.pdf) |
 
