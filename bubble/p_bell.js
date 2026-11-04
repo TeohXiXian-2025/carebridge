@@ -29,7 +29,7 @@
     ]);
     const role = (r) => chain(CU('role_option_role'), X.eq(OV('role', r)));
     const workflows = [
-      wf(pfx + ' Open bell', { type: 'ButtonClicked', el: pfx + ' Bell Btn' }, [A.show(pfx + ' Notif Panel')]),
+      wf(pfx + ' Open bell', { type: 'ButtonClicked', el: pfx + ' Bell Btn' }, [{ type: 'ToggleElement', properties: { element_id: '@' + pfx + ' Notif Panel' } }]),
       wf(pfx + ' Mark all read', { type: 'ButtonClicked', el: pfx + ' Mark All Read' }, [A.changeList('notification', unread(), { read_boolean: true })]),
       wf(pfx + ' Open notification', { type: 'ButtonClicked', el: pfx + ' Notif Row' }, [
         A.change(cell(), { read_boolean: true }),
