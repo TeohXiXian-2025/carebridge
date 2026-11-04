@@ -150,7 +150,7 @@
       B.RG('Admin Invites List', 'invite', adminInvites(), { sep: 0 }, invRow('')),
       label('Ad Add Label', 'Add by Gmail or email'),
       B.G('Ad Add Row', { row: 1, gap: 10 }, [B.In('Admin Email Input', 'name@gmail.com', 'email'), B.Btn('Add Admin Button', 'Add', { h: 46, pad: [0, 20, 0, 20] })]),
-      B.Sm('Ad Help', 'Existing accounts become admin straight away; new ones when they first sign in with that email.'),
+      B.Sm('Ad Help', 'They get an email and become admin the next time they sign in with that address.'),
     ]),
     B.Card('Pa Account Card', { gap: 12, pad: 18 }, [
       B.H3('Pa Title', 'My account', { fs: 16 }), B.Sm('Pa Signed', TX('Signed in as [b]', CU('email'), '[/b]')),
@@ -207,16 +207,13 @@
     A.hide('Reject Popup'),
     A.reset(),
   ];
-  const userByEmail = (v) => chain(SU([['email', v]]), X.first());
   const addAdmin = [
-    A.change(userByEmail(V('Admin Email Input')), { role_option_role: OV('role', 'platformAdmin'), home_custom_home: null }, chain(userByEmail(V('Admin Email Input')), X.notEmpty())),
-    A.create('invite', { email_text: TX(V('Admin Email Input')), role_option_role: OV('role', 'platformAdmin'), invitedby_user: CU() }, chain(userByEmail(V('Admin Email Input')), X.empty())),
+    A.create('invite', { email_text: TX(V('Admin Email Input')), role_option_role: OV('role', 'platformAdmin'), invitedby_user: CU() }),
     A.email(V('Admin Email Input'), 'You are now a CareBridge platform admin', TX(CU('fullname_text'), ' added you as a platform admin on CareBridge.\n\nLog in with this email address to review new welfare homes.')),
     A.reset(),
   ];
   const addMgr = [
-    A.change(userByEmail(V('Pm Email Input')), { role_option_role: OV('role', 'homeAdmin'), home_custom_home: cell() }, chain(userByEmail(V('Pm Email Input')), X.notEmpty())),
-    A.create('invite', { email_text: TX(V('Pm Email Input')), role_option_role: OV('role', 'homeAdmin'), home_custom_home: cell(), homename_text: TX(chain(cell(), 'name_text')), invitedby_user: CU() }, chain(userByEmail(V('Pm Email Input')), X.empty())),
+    A.create('invite', { email_text: TX(V('Pm Email Input')), role_option_role: OV('role', 'homeAdmin'), home_custom_home: cell(), homename_text: TX(chain(cell(), 'name_text')), invitedby_user: CU() }),
     A.email(V('Pm Email Input'), TX('You were added as a manager of ', chain(cell(), 'name_text'), ' on CareBridge'), TX('A CareBridge admin added you as a manager of ', chain(cell(), 'name_text'), '.\n\nSign up or log in with this email address to manage the wishlist and pledges.')),
     A.reset(),
   ];
