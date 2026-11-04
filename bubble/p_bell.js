@@ -14,7 +14,7 @@
         B.T(pfx + ' Bell Count', TX(chain(unread(), X.count())), { fs: 10, fwt: 800, fc: 'white', ta: 'center', fw: true, ha: 'center' }),
       ]),
     ]);
-    const row = B.G(pfx + ' Notif Row', { type: 'custom.notification', ds: cell(), col: 1, gap: 2, pad: [10, 14, 10, 14], bg: 'white', border: [1, 'lines'], when: [[chain(cell(), 'read_boolean', X.eq(false)), { bg: 'teallight' }]] }, [
+    const row = B.G(pfx + ' Notif Row', { type: 'custom.notification', ds: cell(), col: 1, gap: 2, pad: [10, 14, 10, 14], bg: 'teallight', border: [1, 'lines'], when: [[chain(cell(), 'read_boolean'), { bg: 'white' }]] }, [
       B.T(pfx + ' Notif Title', TX(chain(cell(), 'title_text')), { fs: 13, fwt: 700 }),
       B.T(pfx + ' Notif Body', TX(chain(cell(), 'body_text')), { fs: 12, fc: 'mutedtext' }),
       B.Sm(pfx + ' Notif Time', TX(chain(cell(), 'Created Date', X.fmtDate('d mmm, h:MM a'))), { fs: 11 }),
