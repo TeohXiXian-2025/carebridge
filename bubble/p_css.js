@@ -19,7 +19,7 @@
   const donorCss = wrap(
     phone(stack(donor.stack) + `${cls('bTGZB')}{width:100%!important}`) +
     // bell before the avatar and vertically centred, like the coded header
-    badge('bTJOg', 'bTJOm') + `${cls(donor.bell)}{order:1;align-self:center!important;margin:0!important}.hd_av{order:2;align-self:center!important}`
+    badge('bTJOg', 'bTJOm') + `${cls(donor.bell)}{order:6!important;align-self:center!important;margin:0!important}.hd_av{order:7!important;align-self:center!important}`
   );
 
   // Admin page
